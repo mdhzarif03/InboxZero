@@ -1,0 +1,357 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider   = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Auth.js (database sessions) tables
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts         Account[]
+  sessions         Session[]
+  preferences      UserPreference?
+  connectedAccounts ConnectedAccount[]
+  threads          Thread[]
+  messages         Message[]
+  classifications  Classification[]
+  summaries        ThreadSummary[]
+  actionItems      ActionItem[]
+  followUps        FollowUp[]
+  deadlines        Deadline[]
+  aiUsage          AiUsage[]
+  auditLogs        AuditLog[]
+}
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ---------------------------------------------------------------------------
+// User preferences and privacy controls
+// ---------------------------------------------------------------------------
+
+model UserPreference {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  aiProvider          String   @default("none") // none | ollama | gemini
+  cloudAiConsentAt    DateTime? // explicit consent to send email content to a cloud provider
+  summaryStyle        String   @default("standard")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// Gmail connection and sync state
+// ---------------------------------------------------------------------------
+
+enum ConnectionStatus {
+  ACTIVE
+  NEEDS_REAUTH
+  REVOKED
+  DISCONNECTED
+}
+
+model ConnectedAccount {
+  id                 String           @id @default(cuid())
+  userId             String
+  provider           String           @default("gmail")
+  emailAddress       String
+  // AES-256-GCM envelope: base64(iv) . base64(authTag) . base64(ciphertext)
+  encryptedRefreshToken String
+  accessTokenCache   String?          // encrypted, short-lived
+  accessTokenExpiresAt DateTime?
+  scopes             String
+  status             ConnectionStatus @default(ACTIVE)
+  historyId          String?          // Gmail incremental sync cursor
+  lastSyncedAt       DateTime?
+  syncLockedAt       DateTime?         // soft lock to prevent overlapping sync runs
+  lastSyncError      String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  threads            Thread[]
+
+  @@unique([userId, emailAddress])
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Mail data (read-only mirror of Gmail)
+// ---------------------------------------------------------------------------
+
+model Thread {
+  id               String           @id @default(cuid())
+  userId           String
+  connectedAccountId String
+  gmailThreadId    String
+  subject          String
+  snippet          String           @default("")
+  participants     String[]         @default([])
+  messageCount     Int              @default(0)
+  unreadCount      Int              @default(0)
+  lastMessageAt    DateTime
+  lastMessageFromMe Boolean         @default(false)
+  hasAttachments   Boolean          @default(false)
+  // Per-task AI completion records: {classify|summarize|actions: {hash,status,at,attempts}}
+  aiTaskState      Json             @default("{}")
+  starred          Boolean          @default(false)
+  archived         Boolean          @default(false)
+  labelIds         String[]         @default([])
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connectedAccount ConnectedAccount @relation(fields: [connectedAccountId], references: [id], onDelete: Cascade)
+  messages         Message[]
+  classification   Classification?
+  summary          ThreadSummary?
+  actionItems      ActionItem[]
+  followUps        FollowUp[]
+  deadlines        Deadline[]
+
+  @@unique([connectedAccountId, gmailThreadId])
+  @@index([userId, lastMessageAt])
+  @@index([userId, archived])
+}
+
+model Message {
+  id               String   @id @default(cuid())
+  userId           String
+  threadId         String
+  gmailMessageId   String
+  fromAddress      String
+  fromName         String?
+  toAddresses      String[] @default([])
+  ccAddresses      String[] @default([])
+  subject          String   @default("")
+  bodyText         String   @default("")  // plain-text body, truncated at ingest
+  snippet          String   @default("")
+  isFromMe         Boolean  @default(false)
+  isUnread         Boolean  @default(false)
+  sentAt           DateTime
+  listUnsubscribe  Boolean  @default(false)
+  precedence       String?
+  attachmentsJson  Json     @default("[]")  // metadata only: filename, mimeType, size
+  // Full-text search vector, maintained by trigger in migration
+  searchVector     Unsupported("tsvector")?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  thread           Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@unique([threadId, gmailMessageId])
+  @@index([userId, sentAt])
+  @@index([userId, fromAddress])
+}
+
+// ---------------------------------------------------------------------------
+// AI and analysis outputs (each row records its producer)
+// ---------------------------------------------------------------------------
+
+enum CategoryKind {
+  PRIORITY
+  NEEDS_REPLY
+  WAITING_FOR_REPLY
+  FOLLOW_UP
+  DEADLINES
+  NEWSLETTERS
+  NOTIFICATIONS
+  PROMOTIONS
+  ARCHIVED
+  GENERAL
+}
+
+model Classification {
+  id          String        @id @default(cuid())
+  userId      String
+  threadId    String        @unique
+  category    CategoryKind
+  priority    Int           @default(3) // 1 (highest) .. 5
+  confidence  Float         @default(0)
+  producer    String        // "deterministic" | "ollama:<model>" | "gemini:<model>"
+  // Fingerprint of the content and Gmail state the AI category was computed from (null for deterministic rows)
+  aiInputKey  String?
+  reasons     String[]      @default([])
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  thread      Thread        @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([userId, category])
+}
+
+model ThreadSummary {
+  id              String   @id @default(cuid())
+  userId          String
+  threadId        String   @unique
+  mainSubject     String
+  // Structured JSON validated by zod before storage. Each item carries sourceMessageIds
+  // and a basis of "stated" (explicit in email) or "inferred" (AI interpretation).
+  payload         Json
+  producer        String
+  createdAt       DateTime @default(now())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  thread          Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+}
+
+enum ActionStatus {
+  OPEN
+  CONFIRMED
+  COMPLETED
+  DISMISSED
+}
+
+model ActionItem {
+  id               String       @id @default(cuid())
+  userId           String
+  threadId         String
+  description      String
+  responsible      String?
+  deadlineText     String?      // original expression, verbatim
+  deadlineAt       DateTime?    // normalized only when unambiguous
+  priority         Int          @default(3)
+  status           ActionStatus @default(OPEN)
+  confidence       Float        @default(0)
+  sourceMessageId  String?
+  producer         String
+  userEdited       Boolean      @default(false)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  thread           Thread       @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+}
+
+enum FollowUpStatus {
+  WAITING
+  DUE
+  SNOOZED
+  RESOLVED
+  DISMISSED
+}
+
+model FollowUp {
+  id              String         @id @default(cuid())
+  userId          String
+  threadId        String
+  contactAddress  String
+  sentAt          DateTime       // last message sent by user
+  suggestedAt     DateTime       // suggested follow-up date
+  status          FollowUpStatus @default(WAITING)
+  reason          String
+  manual          Boolean        @default(false)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  thread          Thread         @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@unique([threadId])
+  @@index([userId, status, suggestedAt])
+}
+
+enum DeadlineKind {
+  EXPLICIT_DEADLINE
+  MEETING
+  EVENT
+  PAYMENT_DUE
+  RENEWAL
+  SUGGESTED_FOLLOW_UP
+  UNKNOWN
+}
+
+enum DeadlineConfidence {
+  CONFIRMED   // unambiguous date stated in email
+  AMBIGUOUS   // needs user confirmation
+}
+
+model Deadline {
+  id                  String             @id @default(cuid())
+  userId              String
+  threadId            String
+  kind                DeadlineKind
+  originalExpression  String
+  normalizedAt        DateTime?
+  timezone            String?
+  sourceMessageId     String?
+  confidence          Float              @default(0)
+  status              DeadlineConfidence @default(AMBIGUOUS)
+  producer            String
+  userConfirmed       Boolean            @default(false)
+  createdAt           DateTime           @default(now())
+  user                User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  thread              Thread             @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([userId, normalizedAt])
+}
+
+// ---------------------------------------------------------------------------
+// AI cost control and audit
+// ---------------------------------------------------------------------------
+
+model AiUsage {
+  id           String   @id @default(cuid())
+  userId       String
+  provider     String
+  model        String
+  task         String   // classify | summarize | actions | deadlines
+  inputTokens  Int      @default(0)  // estimated
+  outputTokens Int      @default(0)  // estimated
+  status       String   // ok | error | skipped
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?  // nullable so system events survive user deletion
+  action    String   // e.g. gmail.connected, gmail.disconnected, account.deleted, ai.cloud_consent
+  detail    Json     @default("{}")
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+}
