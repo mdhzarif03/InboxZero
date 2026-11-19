@@ -2,21 +2,25 @@ import { google, type gmail_v1 } from "googleapis";
 import type { Auth } from "googleapis";
 import type { GmailMessage } from "@/lib/gmail/parse";
 
-/**
- * Thin, typed wrapper over the Gmail REST API. It contains no business logic.
- * Every call uses the read-only scope; any call that would need more is a bug.
- */
-
 export class HistoryExpiredError extends Error {
   readonly code = "HISTORY_EXPIRED";
+
   constructor() {
-    super("Gmail history cursor expired. A full resynchronization is required.");
+    super(
+      "Gmail history cursor expired. A full resynchronization is required.",
+    );
+    this.name = "HistoryExpiredError";
   }
 }
 
 export class GmailApiError extends Error {
-  constructor(message: string, readonly status: number | undefined) {
+  constructor(
+    message: string,
+    readonly status: number | undefined,
+    readonly reason?: string,
+  ) {
     super(message);
+    this.name = "GmailApiError";
   }
 }
 
@@ -24,59 +28,188 @@ function gmailFor(auth: Auth.OAuth2Client): gmail_v1.Gmail {
   return google.gmail({ version: "v1", auth });
 }
 
-async function withRetry<T>(fn: () => Promise<T>, attempts = 4): Promise<T> {
-  let lastError: unknown;
-  for (let i = 0; i < attempts; i++) {
-    try {
-      return await fn();
-    } catch (err) {
-      lastError = err;
-      const status = (err as { code?: number; response?: { status?: number } }).response?.status
-        ?? (err as { code?: number }).code;
-      const retryable = status === 429 || (typeof status === "number" && status >= 500);
-      if (!retryable || i === attempts - 1) break;
-      // Exponential backoff with jitter.
-      const delay = Math.min(30_000, 500 * 2 ** i) + Math.floor(Math.random() * 250);
-      await new Promise((r) => setTimeout(r, delay));
-    }
+/**
+ * Space out Gmail API request starts to reduce request bursts.
+ * Requests are scheduled in order but do not block one another while in flight.
+ */
+const MIN_REQUEST_INTERVAL_MS = 800;
+
+let nextRequestAt = 0;
+let requestQueue: Promise<void> = Promise.resolve();
+
+async function waitForRequestSlot(): Promise<void> {
+  let release!: () => void;
+  const previous = requestQueue;
+
+  requestQueue = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+
+  await previous;
+
+  const now = Date.now();
+  const scheduledAt = Math.max(now, nextRequestAt);
+
+  nextRequestAt = scheduledAt + MIN_REQUEST_INTERVAL_MS;
+
+  release();
+
+  const wait = scheduledAt - now;
+
+  if (wait > 0) {
+    await new Promise<void>((resolve) => setTimeout(resolve, wait));
   }
-  const status = (lastError as { response?: { status?: number } }).response?.status;
-  throw new GmailApiError(
-    lastError instanceof Error ? lastError.message : "Gmail request failed",
-    status,
+}
+
+type GmailErrorDetails = {
+  status: number | undefined;
+  reason: string | undefined;
+  retryAfterMs: number;
+};
+
+function getErrorDetails(err: unknown): GmailErrorDetails {
+  const error = err as {
+    code?: number | string;
+    response?: {
+      status?: number;
+      headers?: Record<string, unknown>;
+      data?: {
+        error?: {
+          message?: string;
+          errors?: Array<{ reason?: string }>;
+        };
+      };
+    };
+  };
+
+  const rawStatus = error.response?.status ?? error.code;
+  const status =
+    typeof rawStatus === "number"
+      ? rawStatus
+      : typeof rawStatus === "string" && /^\d+$/.test(rawStatus)
+        ? Number(rawStatus)
+        : undefined;
+
+  const reason = error.response?.data?.error?.errors?.[0]?.reason;
+
+  const retryAfterHeader = error.response?.headers?.["retry-after"];
+  const retryAfterSeconds = Number(retryAfterHeader);
+
+  const retryAfterMs =
+    Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+      ? retryAfterSeconds * 1000
+      : 0;
+
+  return { status, reason, retryAfterMs };
+}
+
+function isRetryableError(details: GmailErrorDetails): boolean {
+  const { status, reason } = details;
+
+  return (
+    status === 429 ||
+    (typeof status === "number" && status >= 500) ||
+    reason === "rateLimitExceeded" ||
+    reason === "userRateLimitExceeded" ||
+    reason === "backendError"
   );
 }
 
-export async function getMailboxProfile(auth: Auth.OAuth2Client): Promise<{ emailAddress: string; historyId: string }> {
-  const res = await withRetry(() => gmailFor(auth).users.getProfile({ userId: "me" }));
+async function withRetry<T>(fn: () => Promise<T>, attempts = 6): Promise<T> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      await waitForRequestSlot();
+      return await fn();
+    } catch (err) {
+      lastError = err;
+
+      const details = getErrorDetails(err);
+
+      if (!isRetryableError(details) || attempt === attempts - 1) {
+        break;
+      }
+
+      const exponentialBackoff = Math.min(60_000, 2_000 * 2 ** attempt);
+
+      const delay = Math.max(details.retryAfterMs, exponentialBackoff);
+
+      console.warn(
+        `[Gmail API] Temporary error. Status: ${details.status ?? "unknown"}, reason: ${details.reason ?? "unknown"}. Retrying in ${delay}ms.`,
+      );
+
+      await new Promise<void>((resolve) => setTimeout(resolve, delay));
+    }
+  }
+
+  const details = getErrorDetails(lastError);
+
+  const originalMessage =
+    lastError instanceof Error ? lastError.message : "Gmail request failed";
+
+  throw new GmailApiError(
+    `${originalMessage}${details.reason ? ` (reason: ${details.reason})` : ""}`,
+    details.status,
+    details.reason,
+  );
+}
+
+/**
+ * Public wrapper for Gmail API calls made outside this module.
+ */
+export function gmailRequest<T>(fn: () => Promise<T>): Promise<T> {
+  return withRetry(fn);
+}
+
+export async function getMailboxProfile(
+  auth: Auth.OAuth2Client,
+): Promise<{ emailAddress: string; historyId: string }> {
+  const res = await withRetry(() =>
+    gmailFor(auth).users.getProfile({ userId: "me" }),
+  );
+
   return {
     emailAddress: res.data.emailAddress ?? "",
     historyId: res.data.historyId ?? "",
   };
 }
 
-/** Lists message ids for an initial sync, paginating up to `maxMessages`. */
 export async function listRecentMessageRefs(
   auth: Auth.OAuth2Client,
   opts: { query: string; maxMessages: number },
 ): Promise<Array<{ id: string; threadId: string }>> {
   const gmail = gmailFor(auth);
   const refs: Array<{ id: string; threadId: string }> = [];
+
   let pageToken: string | undefined;
+
   do {
+    const remaining = opts.maxMessages - refs.length;
+
+    if (remaining <= 0) break;
+
     const res = await withRetry(() =>
       gmail.users.messages.list({
         userId: "me",
         q: opts.query,
-        maxResults: Math.min(100, opts.maxMessages - refs.length),
+        maxResults: Math.min(100, remaining),
         pageToken,
       }),
     );
-    for (const m of res.data.messages ?? []) {
-      if (m.id && m.threadId) refs.push({ id: m.id, threadId: m.threadId });
+
+    for (const message of res.data.messages ?? []) {
+      if (message.id && message.threadId) {
+        refs.push({
+          id: message.id,
+          threadId: message.threadId,
+        });
+      }
     }
+
     pageToken = res.data.nextPageToken ?? undefined;
   } while (pageToken && refs.length < opts.maxMessages);
+
   return refs;
 }
 
@@ -86,62 +219,114 @@ export type HistoryChanges = {
   latestHistoryId: string;
 };
 
-/**
- * Incremental changes since `startHistoryId`. Throws HistoryExpiredError when Google
- * reports the cursor is too old (HTTP 404), which triggers a full resync by the caller.
- */
-export async function listHistoryChanges(auth: Auth.OAuth2Client, startHistoryId: string): Promise<HistoryChanges> {
+export async function listHistoryChanges(
+  auth: Auth.OAuth2Client,
+  startHistoryId: string,
+): Promise<HistoryChanges> {
   const gmail = gmailFor(auth);
+
   const addedOrChanged = new Map<string, { id: string; threadId: string }>();
+
   const deleted = new Set<string>();
+
   let latestHistoryId = startHistoryId;
   let pageToken: string | undefined;
 
   do {
     let res;
+
     try {
       res = await withRetry(() =>
         gmail.users.history.list({
           userId: "me",
           startHistoryId,
-          historyTypes: ["messageAdded", "messageDeleted", "labelAdded", "labelRemoved"],
+          historyTypes: [
+            "messageAdded",
+            "messageDeleted",
+            "labelAdded",
+            "labelRemoved",
+          ],
           pageToken,
         }),
       );
     } catch (err) {
-      if ((err as GmailApiError).status === 404) throw new HistoryExpiredError();
+      if (err instanceof GmailApiError && err.status === 404) {
+        throw new HistoryExpiredError();
+      }
+
       throw err;
     }
+
     latestHistoryId = res.data.historyId ?? latestHistoryId;
+
     for (const record of res.data.history ?? []) {
-      for (const m of record.messagesAdded ?? []) {
-        if (m.message?.id && m.message.threadId) addedOrChanged.set(m.message.id, { id: m.message.id, threadId: m.message.threadId });
+      for (const item of record.messagesAdded ?? []) {
+        if (item.message?.id && item.message.threadId) {
+          addedOrChanged.set(item.message.id, {
+            id: item.message.id,
+            threadId: item.message.threadId,
+          });
+        }
       }
-      for (const m of record.labelsAdded ?? []) {
-        if (m.message?.id && m.message.threadId) addedOrChanged.set(m.message.id, { id: m.message.id, threadId: m.message.threadId });
+
+      for (const item of record.labelsAdded ?? []) {
+        if (item.message?.id && item.message.threadId) {
+          addedOrChanged.set(item.message.id, {
+            id: item.message.id,
+            threadId: item.message.threadId,
+          });
+        }
       }
-      for (const m of record.labelsRemoved ?? []) {
-        if (m.message?.id && m.message.threadId) addedOrChanged.set(m.message.id, { id: m.message.id, threadId: m.message.threadId });
+
+      for (const item of record.labelsRemoved ?? []) {
+        if (item.message?.id && item.message.threadId) {
+          addedOrChanged.set(item.message.id, {
+            id: item.message.id,
+            threadId: item.message.threadId,
+          });
+        }
       }
-      for (const m of record.messagesDeleted ?? []) {
-        if (m.message?.id) deleted.add(m.message.id);
+
+      for (const item of record.messagesDeleted ?? []) {
+        if (item.message?.id) {
+          deleted.add(item.message.id);
+        }
       }
     }
+
     pageToken = res.data.nextPageToken ?? undefined;
   } while (pageToken);
 
-  // A message deleted after being added in the same window should not be fetched.
-  for (const id of deleted) addedOrChanged.delete(id);
-  return { addedOrChanged: [...addedOrChanged.values()], deletedIds: [...deleted], latestHistoryId };
+  for (const id of deleted) {
+    addedOrChanged.delete(id);
+  }
+
+  return {
+    addedOrChanged: [...addedOrChanged.values()],
+    deletedIds: [...deleted],
+    latestHistoryId,
+  };
 }
 
-/** Fetches a full message. Returns null if it was deleted between listing and fetching. */
-export async function getFullMessage(auth: Auth.OAuth2Client, id: string): Promise<GmailMessage | null> {
+export async function getFullMessage(
+  auth: Auth.OAuth2Client,
+  id: string,
+): Promise<GmailMessage | null> {
   try {
-    const res = await withRetry(() => gmailFor(auth).users.messages.get({ userId: "me", id, format: "full" }));
+    const res = await withRetry(() =>
+      gmailFor(auth).users.messages.get({
+        userId: "me",
+        id,
+        format: "full",
+      }),
+    );
+
     return res.data as GmailMessage;
   } catch (err) {
-    if ((err as GmailApiError).status === 404) return null;
+    if (err instanceof GmailApiError && err.status === 404) {
+      return null;
+    }
+
     throw err;
   }
 }
