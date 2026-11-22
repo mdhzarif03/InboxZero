@@ -1,6 +1,7 @@
 "use client";
 
 import { useFormStatus } from "react-dom";
+import { Loader2 } from "lucide-react";
 import { Button, type ButtonProps } from "@/components/ui/button";
 
 /**
@@ -14,7 +15,7 @@ export function SubmitButton({ pendingLabel, children, disabled, ...props }: But
     <Button {...props} type="submit" aria-busy={pending} disabled={pending || Boolean(disabled)}>
       {pending ? (
         <>
-          <span aria-hidden="true" className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-r-transparent" />
+          <Loader2 aria-hidden="true" className="animate-spin" />
           {pendingLabel ?? "Working…"}
         </>
       ) : (

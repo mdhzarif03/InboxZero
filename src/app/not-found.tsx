@@ -1,12 +1,17 @@
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button";
 
 export default function NotFound() {
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-2 px-6 text-center">
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">404</p>
-      <h1 className="text-lg font-semibold">We could not find that page</h1>
-      <p className="text-sm text-muted-foreground">It may have moved, or it may belong to a different account.</p>
-      <Link href="/inbox" className="mt-3 text-sm underline underline-offset-2">Back to Smart Inbox</Link>
+    <main className="relative mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-2 overflow-hidden px-6 text-center">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-grid mask-radial opacity-60" />
+      <p className="relative text-gradient text-8xl font-semibold tracking-tighter">404</p>
+      <h1 className="relative mt-2 text-xl font-semibold tracking-tight">We could not find that page</h1>
+      <p className="relative text-sm text-muted-foreground">It may have moved, or it may belong to a different account.</p>
+      <Link href="/inbox" className={`${buttonVariants({ variant: "outline" })} relative mt-5`}>
+        <ArrowLeft /> Back to Smart Inbox
+      </Link>
     </main>
   );
 }

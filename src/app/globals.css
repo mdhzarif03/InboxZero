@@ -2,34 +2,125 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: 0 0% 100%;
-  --foreground: 222 21% 12%;
-  --muted: 220 14% 96%;
-  --muted-foreground: 220 9% 40%;
-  --border: 220 13% 90%;
-  --accent: 220 14% 94%;
-  --accent-foreground: 222 21% 12%;
-  --primary: 222 47% 18%;
-  --primary-foreground: 0 0% 100%;
-  --destructive: 0 62% 45%;
-  --destructive-foreground: 0 0% 100%;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --background: 222 22% 8%;
-    --foreground: 220 14% 94%;
-    --muted: 222 16% 13%;
-    --muted-foreground: 220 9% 62%;
-    --border: 222 14% 18%;
-    --accent: 222 16% 15%;
-    --accent-foreground: 220 14% 94%;
-    --primary: 220 14% 94%;
-    --primary-foreground: 222 22% 8%;
+@layer base {
+  :root {
+    --background: 240 14% 98%;
+    --foreground: 240 10% 9%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 9%;
+    --muted: 240 9% 95.5%;
+    --muted-foreground: 240 4% 40%;
+    --border: 240 8% 91%;
+    --input: 240 8% 87%;
+    --accent: 252 90% 97%;
+    --accent-foreground: 252 70% 42%;
+    --primary: 252 83% 56%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 252 83% 62%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 152 60% 33%;
+    --warning: 32 92% 40%;
+    --info: 212 90% 46%;
+    color-scheme: light;
   }
+
+  .dark {
+    --background: 240 10% 4.5%;
+    --foreground: 240 8% 95%;
+    --card: 240 8% 7.5%;
+    --card-foreground: 240 8% 95%;
+    --popover: 240 8% 8.5%;
+    --popover-foreground: 240 8% 95%;
+    --muted: 240 6% 12%;
+    --muted-foreground: 240 5% 66%;
+    --border: 240 6% 15%;
+    --input: 240 6% 20%;
+    --accent: 252 35% 15%;
+    --accent-foreground: 252 90% 85%;
+    --primary: 252 85% 64%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 252 85% 68%;
+    --destructive: 0 72% 56%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 152 55% 48%;
+    --warning: 38 92% 56%;
+    --info: 212 90% 62%;
+    color-scheme: dark;
+  }
+
+  * { @apply border-border; }
+  html { -webkit-text-size-adjust: 100%; text-rendering: optimizeLegibility; }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv11", "ss01";
+    min-height: 100vh;
+  }
+  ::selection { background: hsl(var(--primary) / 0.22); }
+  a { text-decoration: none; color: inherit; }
+  button, input, textarea, select { font: inherit; }
+  button:not(:disabled), [role="button"]:not([aria-disabled="true"]), summary { cursor: pointer; }
+  input[type="date"] { color-scheme: light; }
+  .dark input[type="date"] { color-scheme: dark; }
+  :focus-visible { outline: none; }
+
+  /* Slim, unobtrusive scrollbars */
+  * { scrollbar-width: thin; scrollbar-color: hsl(var(--border)) transparent; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 999px; border: 3px solid transparent; background-clip: content-box; }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--input)); background-clip: content-box; border: 3px solid transparent; }
 }
 
-body {
-  @apply bg-background text-foreground antialiased;
+@layer utilities {
+  .scrollbar-none { scrollbar-width: none; }
+  .scrollbar-none::-webkit-scrollbar { display: none; }
+  .text-balance { text-wrap: balance; }
+  .text-pretty { text-wrap: pretty; }
+  .bg-dots {
+    background-image: radial-gradient(hsl(var(--foreground) / 0.12) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, hsl(var(--foreground) / 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--foreground) / 0.05) 1px, transparent 1px);
+    background-size: 44px 44px;
+  }
+  .mask-fade-b { -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent); mask-image: linear-gradient(to bottom, #000 55%, transparent); }
+  .mask-radial { -webkit-mask-image: radial-gradient(ellipse at center, #000 30%, transparent 72%); mask-image: radial-gradient(ellipse at center, #000 30%, transparent 72%); }
+  .text-gradient {
+    background-image: linear-gradient(120deg, hsl(var(--foreground)) 20%, hsl(var(--primary)) 55%, hsl(280 80% 62%) 95%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .glass {
+    background: hsl(var(--background) / 0.72);
+    -webkit-backdrop-filter: saturate(180%) blur(14px);
+    backdrop-filter: saturate(180%) blur(14px);
+  }
+  .skeleton {
+    background: linear-gradient(90deg, hsl(var(--muted)) 25%, hsl(var(--border) / 0.9) 37%, hsl(var(--muted)) 63%);
+    background-size: 400% 100%;
+    animation: shimmer 1.6s ease infinite;
+  }
+  .stagger > * { animation: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .stagger > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger > *:nth-child(2) { animation-delay: 30ms; }
+  .stagger > *:nth-child(3) { animation-delay: 60ms; }
+  .stagger > *:nth-child(4) { animation-delay: 90ms; }
+  .stagger > *:nth-child(5) { animation-delay: 120ms; }
+  .stagger > *:nth-child(6) { animation-delay: 150ms; }
+  .stagger > *:nth-child(7) { animation-delay: 180ms; }
+  .stagger > *:nth-child(8) { animation-delay: 210ms; }
+  .stagger > *:nth-child(n+9) { animation-delay: 240ms; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -2,9 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
-import { CATEGORY_LABELS, formatDateTime } from "@/lib/utils";
+import { CATEGORY_LABELS, cn, formatDateTime } from "@/lib/utils";
+import { ArrowLeft, CalendarClock, ExternalLink, ListChecks, MessagesSquare, Paperclip, Sparkles, Bot, Cpu, Clock3 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Avatar } from "@/components/ui/avatar";
+import { buttonVariants } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Notice } from "@/components/ui/notice";
+import { categoryStyle } from "@/lib/ui/category-style";
 import { ThreadActions } from "./thread-actions";
 
 export const dynamic = "force-dynamic";
@@ -40,120 +45,171 @@ export default async function ThreadPage({ params }: { params: Promise<{ threadI
   const isSample = thread.connectedAccount.provider !== "gmail";
   const gmailUrl = `https://mail.google.com/mail/u/0/#inbox/${thread.gmailThreadId}`;
 
+  const lastIndex = thread.messages.length - 1;
+  const cat = thread.classification ? categoryStyle(thread.classification.category) : null;
+  const followUp = thread.followUps[0];
+
   return (
     <article className="space-y-6">
-      <div>
-        <Link href="/inbox" className="text-xs text-muted-foreground hover:text-foreground">← Smart Inbox</Link>
-        <h1 className="mt-2 text-xl font-semibold tracking-tight">{thread.subject}</h1>
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          {thread.classification ? <Badge>{CATEGORY_LABELS[thread.classification.category]}</Badge> : null}
-          <span>{thread.messageCount} messages</span>
-          <span>·</span>
-          <span>Last activity {formatDateTime(thread.lastMessageAt)}</span>
-          <span>·</span>
+      <div className="space-y-4">
+        <Link href="/inbox" className="group inline-flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground">
+          <ArrowLeft className="size-3.5 transition-transform group-hover:-translate-x-0.5" aria-hidden="true" /> Smart inbox
+        </Link>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-balance text-2xl font-semibold tracking-tight sm:text-[28px] sm:leading-9">{thread.subject}</h1>
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-[13px] text-muted-foreground">
+              {thread.classification ? (
+                <Badge className={cat?.badge}>{cat ? <cat.icon /> : null}{CATEGORY_LABELS[thread.classification.category]}</Badge>
+              ) : null}
+              <span className="inline-flex items-center gap-1.5"><MessagesSquare className="size-3.5" aria-hidden="true" />{thread.messageCount} {thread.messageCount === 1 ? "message" : "messages"}</span>
+              <span className="inline-flex items-center gap-1.5"><Clock3 className="size-3.5" aria-hidden="true" />Last activity {formatDateTime(thread.lastMessageAt)}</span>
+            </div>
+          </div>
           {isSample ? (
-            <span>Open in Gmail unavailable for sample data</span>
+            <span className="shrink-0 text-xs text-muted-foreground">Open in Gmail unavailable for sample data</span>
           ) : (
-            <a href={gmailUrl} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-foreground">Open in Gmail</a>
+            <a href={gmailUrl} target="_blank" rel="noopener noreferrer" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "shrink-0")}>
+              Open in Gmail <ExternalLink />
+            </a>
           )}
         </div>
       </div>
 
-      {thread.followUps.length > 0 ? (
-        <Notice>
-          Follow-up: {thread.followUps[0]!.status === "DUE" ? "due now" : `suggested ${formatDateTime(thread.followUps[0]!.suggestedAt)}`}. {thread.followUps[0]!.reason}
+      {followUp ? (
+        <Notice tone={followUp.status === "DUE" ? "error" : "info"}>
+          <span className="font-medium">Follow-up: {followUp.status === "DUE" ? "due now" : `suggested ${formatDateTime(followUp.suggestedAt)}`}.</span>{" "}
+          {followUp.reason}
         </Notice>
       ) : null}
 
-      <section aria-labelledby="summary-heading" className="space-y-3">
-        <div className="flex items-baseline justify-between">
-          <h2 id="summary-heading" className="text-sm font-semibold">Summary</h2>
-          <span className="text-xs text-muted-foreground">
-            {summaryPayload.source === "ai" ? "AI-generated" : "Rule-based"}
-          </span>
-        </div>
-        {summaryPayload.currentStatus ? <p className="text-sm">{summaryPayload.currentStatus}</p> : null}
-        {summaryPayload.source === "ai" && summaryPayload.disclaimer ? (
-          <p className="text-xs text-muted-foreground">{summaryPayload.disclaimer}</p>
-        ) : null}
-        {summaryItems.length > 0 ? (
-          <ul className="space-y-1.5 text-sm">
-            {summaryItems.slice(0, 30).map((item, i) => (
-              <li key={i} className="flex gap-2">
-                <Badge className="h-fit shrink-0">{item.basis === "stated" ? "Stated" : "Inferred"}</Badge>
-                <span className="min-w-0">{item.text}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-muted-foreground">No questions, requests or dates were detected in this conversation.</p>
-        )}
-      </section>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+        {/* Conversation */}
+        <section aria-labelledby="messages-heading" className="order-2 min-w-0 space-y-3 lg:order-1">
+          <h2 id="messages-heading" className="sr-only">Messages</h2>
+          <ol className="stagger space-y-3">
+            {thread.messages.map((m, idx) => {
+              const who = m.isFromMe ? "You" : m.fromName ?? m.fromAddress;
+              const attachments = Array.isArray(m.attachmentsJson) ? (m.attachmentsJson as Array<{ filename: string }>) : [];
+              return (
+                <li key={m.id}>
+                  <details open={idx >= lastIndex - 1 || thread.messages.length <= 3} className="group overflow-hidden rounded-2xl border border-border bg-card shadow-soft open:shadow-soft">
+                    <summary className={cn("flex list-none items-center gap-3 px-4 py-3.5 outline-none transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-5 [&::-webkit-details-marker]:hidden", m.isFromMe && "bg-accent/40")}>
+                      <Avatar name={who} seed={m.fromAddress} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold">
+                          {who}
+                          {!m.isFromMe && m.fromName ? <span className="ml-1.5 font-normal text-muted-foreground">&lt;{m.fromAddress}&gt;</span> : null}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-muted-foreground">{formatDateTime(m.sentAt)}</span>
+                      </span>
+                      {attachments.length > 0 ? <Paperclip className="size-4 shrink-0 text-muted-foreground" aria-label="Has attachments" /> : null}
+                    </summary>
+                    <div className="border-t border-border px-4 py-4 sm:px-5 sm:pl-[4.75rem]">
+                      {/* Plain text only. React escapes content; no HTML from email is rendered. */}
+                      <div className="whitespace-pre-wrap break-words text-[14.5px] leading-7 text-foreground/90">{m.bodyText || m.snippet}</div>
+                      {attachments.length > 0 ? (
+                        <p className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          <Paperclip className="size-3.5" aria-hidden="true" />
+                          {attachments.map((a, i) => (
+                            <span key={i} className="rounded-md bg-muted px-2 py-1 font-mono">{a.filename}</span>
+                          ))}
+                          <span>(names only, files are not downloaded)</span>
+                        </p>
+                      ) : null}
+                    </div>
+                  </details>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
 
-      <section aria-labelledby="actions-heading" className="space-y-2">
-        <h2 id="actions-heading" className="text-sm font-semibold">Detected actions</h2>
-        {thread.actionItems.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No open actions for this conversation.</p>
-        ) : (
-          <ul className="space-y-3">
-            {thread.actionItems.map((a) => (
-              <li key={a.id} className="rounded-md border border-border p-3">
-                <p className="text-sm">{a.description}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Confidence {Math.round(a.confidence * 100)}% · {a.producer.startsWith("deterministic") ? "rule-based" : "AI"}
-                  {a.deadlineText ? ` · deadline text: “${a.deadlineText}”` : ""}
-                </p>
-                <ThreadActions kind="action" id={a.id} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section aria-labelledby="deadlines-heading" className="space-y-2">
-        <h2 id="deadlines-heading" className="text-sm font-semibold">Dates and deadlines</h2>
-        {thread.deadlines.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No dates detected.</p>
-        ) : (
-          <ul className="space-y-2 text-sm">
-            {thread.deadlines.map((d) => (
-              <li key={d.id} className="flex flex-wrap items-center gap-2">
-                <Badge>{d.status === "CONFIRMED" ? "Confirmed" : "Needs confirmation"}</Badge>
-                <span>“{d.originalExpression}”</span>
-                <span className="text-xs text-muted-foreground">
-                  {d.normalizedAt ? formatDateTime(d.normalizedAt) : "no date"}
-                  {d.timezone ? ` ${d.timezone}` : " · timezone not stated"}
-                </span>
-                {!d.userConfirmed && d.status === "AMBIGUOUS" ? <ThreadActions kind="deadline" id={d.id} /> : null}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section aria-labelledby="messages-heading" className="space-y-3">
-        <h2 id="messages-heading" className="text-sm font-semibold">Messages</h2>
-        <ol className="space-y-4">
-          {thread.messages.map((m) => (
-            <li key={m.id} className="rounded-md border border-border p-4">
-              <div className="flex flex-wrap items-baseline justify-between gap-2 text-xs text-muted-foreground">
-                <span className="font-medium text-foreground">
-                  {m.isFromMe ? "You" : m.fromName ?? m.fromAddress}
-                  {!m.isFromMe && m.fromName ? <span className="font-normal"> &lt;{m.fromAddress}&gt;</span> : null}
-                </span>
-                <span>{formatDateTime(m.sentAt)}</span>
+        {/* Insights rail */}
+        <aside className="order-1 space-y-4 lg:sticky lg:top-24 lg:order-2 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:pr-1" aria-label="Conversation insights">
+          <Card>
+            <section aria-labelledby="summary-heading" className="space-y-3 p-5">
+              <div className="flex items-center justify-between gap-2">
+                <h2 id="summary-heading" className="flex items-center gap-2 text-sm font-semibold">
+                  <Sparkles className="size-4 text-primary" aria-hidden="true" /> Summary
+                </h2>
+                <Badge tone={summaryPayload.source === "ai" ? "primary" : "neutral"}>
+                  {summaryPayload.source === "ai" ? <Bot /> : <Cpu />}
+                  {summaryPayload.source === "ai" ? "AI-generated" : "Rule-based"}
+                </Badge>
               </div>
-              {/* Plain text only. React escapes content; no HTML from email is rendered. */}
-              <div className="mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed">{m.bodyText || m.snippet}</div>
-              {Array.isArray(m.attachmentsJson) && m.attachmentsJson.length > 0 ? (
-                <p className="mt-3 text-xs text-muted-foreground">
-                  Attachments: {(m.attachmentsJson as Array<{ filename: string }>).map((a) => a.filename).join(", ")} (names only, files are not downloaded)
-                </p>
+              {summaryPayload.currentStatus ? <p className="text-sm leading-relaxed">{summaryPayload.currentStatus}</p> : null}
+              {summaryPayload.source === "ai" && summaryPayload.disclaimer ? (
+                <p className="text-xs leading-relaxed text-muted-foreground">{summaryPayload.disclaimer}</p>
               ) : null}
-            </li>
-          ))}
-        </ol>
-      </section>
+              {summaryItems.length > 0 ? (
+                <ul className="space-y-2.5 text-sm">
+                  {summaryItems.slice(0, 30).map((item, i) => (
+                    <li key={i} className="flex gap-2.5">
+                      <Badge tone={item.basis === "stated" ? "success" : "warning"} className="mt-0.5 h-fit shrink-0">{item.basis === "stated" ? "Stated" : "Inferred"}</Badge>
+                      <span className="min-w-0 leading-relaxed">{item.text}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground">No questions, requests or dates were detected in this conversation.</p>
+              )}
+            </section>
+          </Card>
+
+          <Card>
+            <section aria-labelledby="actions-heading" className="space-y-3 p-5">
+              <h2 id="actions-heading" className="flex items-center gap-2 text-sm font-semibold">
+                <ListChecks className="size-4 text-primary" aria-hidden="true" /> Detected actions
+                {thread.actionItems.length > 0 ? <span className="ml-auto rounded-full bg-muted px-2 text-xs tabular-nums text-muted-foreground">{thread.actionItems.length}</span> : null}
+              </h2>
+              {thread.actionItems.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No open actions for this conversation.</p>
+              ) : (
+                <ul className="space-y-3">
+                  {thread.actionItems.map((a) => (
+                    <li key={a.id} className="rounded-xl border border-border bg-background/50 p-3.5">
+                      <p className="text-sm leading-relaxed">{a.description}</p>
+                      <p className="mt-1.5 text-xs text-muted-foreground">
+                        {Math.round(a.confidence * 100)}% confidence · {a.producer.startsWith("deterministic") ? "rule-based" : "AI"}
+                        {a.deadlineText ? ` · deadline text: “${a.deadlineText}”` : ""}
+                      </p>
+                      <ThreadActions kind="action" id={a.id} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </Card>
+
+          <Card>
+            <section aria-labelledby="deadlines-heading" className="space-y-3 p-5">
+              <h2 id="deadlines-heading" className="flex items-center gap-2 text-sm font-semibold">
+                <CalendarClock className="size-4 text-primary" aria-hidden="true" /> Dates and deadlines
+              </h2>
+              {thread.deadlines.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No dates detected.</p>
+              ) : (
+                <ul className="space-y-3 text-sm">
+                  {thread.deadlines.map((d) => (
+                    <li key={d.id} className="space-y-2 rounded-xl border border-border bg-background/50 p-3.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge tone={d.status === "CONFIRMED" ? "success" : "warning"}>{d.status === "CONFIRMED" ? "Confirmed" : "Needs confirmation"}</Badge>
+                      </div>
+                      <p className="font-medium">“{d.originalExpression}”</p>
+                      <p className="text-xs text-muted-foreground">
+                        {d.normalizedAt ? formatDateTime(d.normalizedAt) : "no date"}
+                        {d.timezone ? ` ${d.timezone}` : " · timezone not stated"}
+                      </p>
+                      {!d.userConfirmed && d.status === "AMBIGUOUS" ? <ThreadActions kind="deadline" id={d.id} /> : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </Card>
+        </aside>
+      </div>
     </article>
   );
 }
