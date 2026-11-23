@@ -29,10 +29,12 @@ function gmailFor(auth: Auth.OAuth2Client): gmail_v1.Gmail {
 }
 
 /**
- * Space out Gmail API request starts to reduce request bursts.
- * Requests are scheduled in order but do not block one another while in flight.
+ * Space out Gmail API request starts with headroom below the 6,000-unit/user/minute
+ * quota. A one-second minimum caps even 60-unit full-message requests at 3,600
+ * units/minute per warm server instance. The account sync lock prevents duplicate
+ * sync workers for the same mailbox; this local gate also smooths other requests.
  */
-const MIN_REQUEST_INTERVAL_MS = 800;
+const MIN_REQUEST_INTERVAL_MS = 1_000;
 
 let nextRequestAt = 0;
 let requestQueue: Promise<void> = Promise.resolve();
@@ -131,9 +133,10 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 6): Promise<T> {
         break;
       }
 
-      const exponentialBackoff = Math.min(60_000, 2_000 * 2 ** attempt);
+      const exponentialBackoff = Math.min(60_000, 1_000 * 2 ** attempt);
+      const jitter = Math.floor(Math.random() * 1_000);
 
-      const delay = Math.max(details.retryAfterMs, exponentialBackoff);
+      const delay = Math.max(details.retryAfterMs, exponentialBackoff + jitter);
 
       console.warn(
         `[Gmail API] Temporary error. Status: ${details.status ?? "unknown"}, reason: ${details.reason ?? "unknown"}. Retrying in ${delay}ms.`,
