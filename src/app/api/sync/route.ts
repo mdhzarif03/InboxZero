@@ -17,8 +17,43 @@ function workerAuthorized(req: NextRequest): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-/**
- * POST /api/sync
+/** Authenticated progress snapshot for the signed-in user's mailbox. */
+export async function GET() {
+  const user = await getUserOrNull();
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+  const account = await db.connectedAccount.findFirst({
+    where: { userId: user.id, provider: "gmail" },
+    orderBy: { createdAt: "desc" },
+    select: {
+      emailAddress: true,
+      syncProgressStatus: true,
+      syncProgressStage: true,
+      syncProgressCurrent: true,
+      syncProgressTotal: true,
+      syncProgressUpdatedAt: true,
+      lastSyncedAt: true,
+      lastSyncError: true,
+      syncLockedAt: true,
+    },
+  });
+
+  if (!account) return NextResponse.json({ status: "idle" });
+  return NextResponse.json({
+    status: account.syncProgressStatus,
+    stage: account.syncProgressStage,
+    current: account.syncProgressCurrent,
+    total: account.syncProgressTotal,
+    updatedAt: account.syncProgressUpdatedAt,
+    lastSyncedAt: account.lastSyncedAt,
+    error: account.lastSyncError,
+    running: Boolean(account.syncLockedAt),
+    emailAddress: account.emailAddress,
+  });
+}
+
+const anchorPost=`/**
+ * POST /api/sync`;
  *  - Signed-in user: syncs that user's own accounts only (with cooldown).
  *  - Worker (Authorization: Bearer SYNC_SECRET): syncs every ACTIVE account. Used by the scheduler.
  */
