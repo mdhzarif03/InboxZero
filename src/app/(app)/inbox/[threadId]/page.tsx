@@ -21,9 +21,21 @@ type SummaryItem = {
   sourceMessageIds?: string[];
 };
 
-export default async function ThreadPage({ params }: { params: Promise<{ threadId: string }> }) {
+export default async function ThreadPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ threadId: string }>;
+  searchParams: Promise<{ page?: string; pageSize?: string; category?: string }>;
+}) {
   const user = await requireUser();
   const { threadId } = await params;
+  const query = await searchParams;
+  const returnParams = new URLSearchParams();
+  if (query.page && /^\\d+$/.test(query.page)) returnParams.set("page", query.page);
+  if (["25", "50", "100"].includes(query.pageSize ?? "")) returnParams.set("pageSize", query.pageSize!);
+  if (query.category) returnParams.set("category", query.category);
+  const inboxHref = returnParams.size ? `/inbox?${returnParams.toString()}` : "/inbox";
 
   // Ownership is enforced in the query. A thread belonging to another user is indistinguishable from a missing one.
   const thread = await db.thread.findFirst({
@@ -52,7 +64,7 @@ export default async function ThreadPage({ params }: { params: Promise<{ threadI
   return (
     <article className="space-y-6">
       <div className="space-y-4">
-        <Link href="/inbox" className="group inline-flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground">
+        <Link href={inboxHref} className="group inline-flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground">
           <ArrowLeft className="size-3.5 transition-transform group-hover:-translate-x-0.5" aria-hidden="true" /> Smart inbox
         </Link>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
