@@ -20,8 +20,8 @@ export const dynamic = "force-dynamic";
 function buildEmailDocument(html: string): string {
   const policy = "<meta charset=\"utf-8\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; font-src https: data:; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">";
   const styles = "<style>html,body{margin:0;padding:0;background:#fff;color:#202124;font:14px Arial,sans-serif}body{padding:24px;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}pre{white-space:pre-wrap;overflow-wrap:anywhere}a{color:#1967d2}*{box-sizing:border-box}</style>";
-  if (/<head\\b[^>]*>/i.test(html)) {
-    return html.replace(/<head\\b[^>]*>/i, (head) => head + policy).replace(/<\\/head>/i, styles + "</head>");
+  if (/<head\b[^>]*>/i.test(html)) {
+    return html.replace(/<head\b[^>]*>/i, (head) => head + policy).replace(/<\/head>/i, styles + "</head>");
   }
   return "<!doctype html><html><head>" + policy + styles + "</head><body>" + html + "</body></html>";
 }
