@@ -83,9 +83,9 @@ export default async function ThreadPage({ params }: { params: Promise<{ threadI
         </Notice>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+      <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
         {/* Conversation */}
-        <section aria-labelledby="messages-heading" className="order-2 min-w-0 space-y-3 lg:order-1">
+        <section aria-labelledby="messages-heading" className="order-1 min-w-0 space-y-3">
           <h2 id="messages-heading" className="sr-only">Messages</h2>
           <ol className="stagger space-y-3">
             {thread.messages.map((m, idx) => {
@@ -105,9 +105,21 @@ export default async function ThreadPage({ params }: { params: Promise<{ threadI
                       </span>
                       {attachments.length > 0 ? <Paperclip className="size-4 shrink-0 text-muted-foreground" aria-label="Has attachments" /> : null}
                     </summary>
-                    <div className="border-t border-border px-4 py-4 sm:px-5 sm:pl-[4.75rem]">
-                      {/* Plain text only. React escapes content; no HTML from email is rendered. */}
-                      <div className="whitespace-pre-wrap break-words text-[14.5px] leading-7 text-foreground/90">{m.bodyText || m.snippet}</div>
+                    <div className="border-t border-border px-4 py-5 sm:px-6 sm:py-6">
+                      <dl className="mb-5 grid gap-x-6 gap-y-2 border-b border-border/70 pb-4 text-xs sm:grid-cols-[56px_minmax(0,1fr)]">
+                        <dt className="text-muted-foreground">From</dt>
+                        <dd className="min-w-0 break-words text-foreground">{m.fromName ? `${m.fromName} <${m.fromAddress}>` : m.fromAddress}</dd>
+                        {m.toAddresses.length > 0 ? <>
+                          <dt className="text-muted-foreground">To</dt>
+                          <dd className="min-w-0 break-words text-foreground">{m.toAddresses.join(", ")}</dd>
+                        </> : null}
+                        {m.ccAddresses.length > 0 ? <>
+                          <dt className="text-muted-foreground">Cc</dt>
+                          <dd className="min-w-0 break-words text-foreground">{m.ccAddresses.join(", ")}</dd>
+                        </> : null}
+                      </dl>
+                      {/* Render as escaped plain text: email-supplied HTML is never executed. */}
+                      <div className="max-w-[82ch] whitespace-pre-wrap break-words text-[15px] leading-7 text-foreground sm:text-[15.5px] sm:leading-8">{m.bodyText || m.snippet}</div>
                       {attachments.length > 0 ? (
                         <p className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                           <Paperclip className="size-3.5" aria-hidden="true" />
@@ -126,7 +138,7 @@ export default async function ThreadPage({ params }: { params: Promise<{ threadI
         </section>
 
         {/* Insights rail */}
-        <aside className="order-1 space-y-4 lg:sticky lg:top-24 lg:order-2 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:pr-1" aria-label="Conversation insights">
+        <aside className="order-2 grid min-w-0 gap-4 sm:grid-cols-2 xl:sticky xl:top-24 xl:grid-cols-1 xl:max-h-[calc(100vh-7rem)] xl:overflow-y-auto xl:pr-1" aria-label="Conversation insights">
           <Card>
             <section aria-labelledby="summary-heading" className="space-y-3 p-5">
               <div className="flex items-center justify-between gap-2">
