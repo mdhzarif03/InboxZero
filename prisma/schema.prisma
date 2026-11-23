@@ -108,6 +108,11 @@ model ConnectedAccount {
   historyId          String?          // Gmail incremental sync cursor
   lastSyncedAt       DateTime?
   syncLockedAt       DateTime?         // soft lock to prevent overlapping sync runs
+  syncProgressStatus String            @default("idle")
+  syncProgressStage  String?
+  syncProgressCurrent Int              @default(0)
+  syncProgressTotal  Int               @default(0)
+  syncProgressUpdatedAt DateTime?
   lastSyncError      String?
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
