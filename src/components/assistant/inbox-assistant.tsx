@@ -49,7 +49,7 @@ export function InboxAssistant() {
       <div className="flex items-center gap-3 border-b border-border px-5 py-4">
         <div className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary"><Search className="size-5" /></div>
         <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-semibold">Search your inbox</h2>
+          <h2 className="text-sm font-semibold">Quick answers</h2>
           <p className="text-xs text-muted-foreground">Search conversations and query your existing action, follow-up and date records.</p>
         </div>
         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300"><ShieldCheck className="size-3" /> Private search</span>
