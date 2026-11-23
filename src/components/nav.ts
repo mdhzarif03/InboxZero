@@ -1,4 +1,4 @@
-import { CalendarDays, Clock3, Inbox, ListChecks, Mail, Search, Settings2, type LucideIcon } from "lucide-react";
+import { Bot, CalendarDays, Clock3, Inbox, ListChecks, Mail, Search, Settings2, type LucideIcon } from "lucide-react";
 
 export type NavItem = { href: string; label: string; icon: LucideIcon; shortcut: string; hint: string };
 export type NavGroup = { label: string; items: NavItem[] };
@@ -8,6 +8,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Workspace",
     items: [
       { href: "/inbox", label: "Smart inbox", icon: Inbox, shortcut: "I", hint: "Conversations grouped by what needs you" },
+      { href: "/assistant", label: "Inbox Assistant", icon: Bot, shortcut: "B", hint: "Ask questions across your mailbox" },
       { href: "/actions", label: "Action center", icon: ListChecks, shortcut: "A", hint: "Requests found in your email" },
       { href: "/follow-ups", label: "Follow-ups", icon: Clock3, shortcut: "F", hint: "Replies you are waiting for" },
       { href: "/deadlines", label: "Deadlines", icon: CalendarDays, shortcut: "D", hint: "Dates found in your email" },
