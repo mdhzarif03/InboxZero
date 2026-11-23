@@ -134,7 +134,7 @@ export default async function InboxPage({
                   return (
                     <li key={t.id} className="border-b border-border last:border-0">
                       <Link
-                        href={`/inbox/${t.id}`}
+                        href={`/inbox/${t.id}?${new URLSearchParams({ page: String(currentPage), pageSize: String(pageSize), ...(active !== "ALL" ? { category: active } : {}) }).toString()}`}
                         className="group relative flex items-center gap-4 px-4 py-3.5 outline-none transition-colors hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-5"
                       >
                         {unread ? <span aria-hidden="true" className="absolute inset-y-3 left-0 w-[3px] rounded-r-full bg-primary" /> : null}
