@@ -108,7 +108,7 @@ export function InboxAssistant() {
             {loading ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
           </button>
         </form>
-        <p className="text-[11px] text-muted-foreground">Free and read-only. Search and summaries run on InboxZero's server using your existing synced records. No email content is sent to Gemini or another AI provider.</p>
+        <p className="text-[11px] text-muted-foreground">Free and read-only. Search and summaries run on InboxZero&apos;s server using your existing synced records. No email content is sent to Gemini or another AI provider.</p>
       </div>
     </section>
   );
