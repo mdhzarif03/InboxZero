@@ -51,7 +51,9 @@ export async function GET() {
     updatedAt: account.syncProgressUpdatedAt,
     lastSyncedAt: account.lastSyncedAt,
     error: account.lastSyncError,
-    running: Boolean(account.syncLockedAt),
+    // Match the lock TTL used by the sync worker so abandoned locks do not
+    // leave the UI showing a permanent spinner.
+    running: Boolean(account.syncLockedAt && Date.now() - account.syncLockedAt.getTime() < 10 * 60 * 1000),
     emailAddress: account.emailAddress,
   });
 }
