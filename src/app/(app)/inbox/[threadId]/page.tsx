@@ -12,7 +12,7 @@ import { Notice } from "@/components/ui/notice";
 import { categoryStyle } from "@/lib/ui/category-style";
 import { ThreadActions } from "./thread-actions";
 import { getAuthorizedClient } from "@/lib/gmail/oauth";
-import { getFullMessage } from "@/lib/gmail/client";
+import { embedInlineImages, getFullMessage } from "@/lib/gmail/client";
 import { normalizeGmailMessage } from "@/lib/gmail/parse";
 
 export const dynamic = "force-dynamic";
@@ -65,19 +65,19 @@ export default async function ThreadPage({
   if (!thread) notFound();
 
   // Backfill formatted bodies for messages imported before HTML storage existed.
-  if (thread.connectedAccount.provider === "gmail" && thread.messages.some((message) => !message.bodyHtmlFetched)) {
+  if (thread.connectedAccount.provider === "gmail" && thread.messages.some((message) => !message.bodyHtmlFetched || /cid:/i.test(message.bodyHtml ?? ""))) {
     try {
       const auth = await getAuthorizedClient(thread.connectedAccountId, user.id);
       for (const message of thread.messages) {
-        if (message.bodyHtmlFetched) continue;
+        if (message.bodyHtmlFetched && !/cid:/i.test(message.bodyHtml ?? "")) continue;
         const raw = await getFullMessage(auth, message.gmailMessageId);
         const normalized = raw ? normalizeGmailMessage(raw) : null;
         if (normalized) {
           await db.message.update({
             where: { id: message.id },
-            data: { bodyHtml: normalized.bodyHtml, bodyHtmlFetched: true },
+            data: { bodyHtml: await embedInlineImages(auth, raw!, normalized.bodyHtml), bodyHtmlFetched: true },
           });
-          message.bodyHtml = normalized.bodyHtml;
+          message.bodyHtml = await embedInlineImages(auth, raw!, normalized.bodyHtml);
           message.bodyHtmlFetched = true;
         }
       }
