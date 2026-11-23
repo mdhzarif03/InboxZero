@@ -20,11 +20,15 @@ export const dynamic = "force-dynamic";
 export default async function InboxPage({
   searchParams,
 }: {
-  searchParams: Promise<{ category?: string; synced?: string; error?: string }>;
+  searchParams: Promise<{ category?: string; synced?: string; error?: string; page?: string; pageSize?: string }>;
 }) {
   const user = await requireUser();
   const params = await searchParams;
   const active = CATEGORY_ORDER.includes(params.category as (typeof CATEGORY_ORDER)[number]) ? params.category! : "ALL";
+  const requestedPageSize = Number(params.pageSize);
+  const pageSize = [25, 50, 100].includes(requestedPageSize) ? requestedPageSize : 25;
+  const requestedPage = Number(params.page);
+  const page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
 
   const [account, counts] = await Promise.all([
     db.connectedAccount.findFirst({ where: { userId: user.id }, select: { emailAddress: true, provider: true, status: true, lastSyncedAt: true, lastSyncError: true } }),
@@ -42,15 +46,21 @@ export default async function InboxPage({
     );
   }
 
+  const threadWhere = {
+    userId: user.id,
+    ...(active === "ARCHIVED" ? {} : { archived: false }),
+    ...(active !== "ALL" ? { classification: { is: { category: active as CategoryKind } } } : {}),
+  };
+
+  const totalThreads = await db.thread.count({ where: threadWhere });
+  const totalPages = Math.max(1, Math.ceil(totalThreads / pageSize));
+  const currentPage = Math.min(page, totalPages);
   const threads = await db.thread.findMany({
-    where: {
-      userId: user.id,
-      ...(active === "ARCHIVED" ? {} : { archived: false }),
-      ...(active !== "ALL" ? { classification: { is: { category: active as CategoryKind } } } : {}),
-    },
+    where: threadWhere,
     include: { classification: { select: { category: true, priority: true, reasons: true } } },
     orderBy: [{ lastMessageAt: "desc" }],
-    take: 100,
+    skip: (currentPage - 1) * pageSize,
+    take: pageSize,
   });
 
   const countByCategory = new Map(counts.map((c) => [c.category as string, c._count._all]));
@@ -100,9 +110,22 @@ export default async function InboxPage({
             </EmptyState>
           ) : (
             <>
-              <p className="mb-2 px-1 text-xs text-muted-foreground">
-                {activeLabel} · {threads.length}{threads.length === 100 ? "+" : ""} {threads.length === 1 ? "conversation" : "conversations"}
-              </p>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3 px-1">
+                <p className="text-xs text-muted-foreground">
+                  {activeLabel} · {totalThreads === 0 ? "0" : `${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, totalThreads)}`} of {totalThreads.toLocaleString()} conversations
+                </p>
+                <form method="GET" className="flex items-center gap-2 text-xs text-muted-foreground">
+                  {active !== "ALL" ? <input type="hidden" name="category" value={active} /> : null}
+                  <input type="hidden" name="page" value="1" />
+                  <label htmlFor="inbox-page-size">Show</label>
+                  <select id="inbox-page-size" name="pageSize" defaultValue={String(pageSize)} onChange={(event) => event.currentTarget.form?.requestSubmit()} className="h-8 rounded-lg border border-border bg-card px-2 text-xs text-foreground outline-none focus:ring-2 focus:ring-ring">
+                    <option value="25">25</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                  </select>
+                  <span>per page</span>
+                </form>
+              </div>
               <ul className="stagger overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
                 {threads.map((t) => {
                   const cat = t.classification ? categoryStyle(t.classification.category) : null;
@@ -138,6 +161,25 @@ export default async function InboxPage({
                   );
                 })}
               </ul>
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3">
+                <p className="text-xs text-muted-foreground">
+                  Page {currentPage} of {totalPages}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Link
+                    href={`/inbox?${new URLSearchParams({ ...(active !== "ALL" ? { category: active } : {}), page: String(Math.max(1, currentPage - 1)), pageSize: String(pageSize) }).toString()}`}
+                    aria-disabled={currentPage <= 1}
+                    tabIndex={currentPage <= 1 ? -1 : 0}
+                    className={cn(buttonVariants({ variant: "outline", size: "sm" }), currentPage <= 1 && "pointer-events-none opacity-40")}
+                  >Previous</Link>
+                  <Link
+                    href={`/inbox?${new URLSearchParams({ ...(active !== "ALL" ? { category: active } : {}), page: String(Math.min(totalPages, currentPage + 1)), pageSize: String(pageSize) }).toString()}`}
+                    aria-disabled={currentPage >= totalPages}
+                    tabIndex={currentPage >= totalPages ? -1 : 0}
+                    className={cn(buttonVariants({ variant: "outline", size: "sm" }), currentPage >= totalPages && "pointer-events-none opacity-40")}
+                  >Next</Link>
+                </div>
+              </div>
             </>
           )}
         </div>
