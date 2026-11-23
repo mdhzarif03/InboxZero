@@ -482,6 +482,9 @@ export async function syncConnectedAccount(
       where: { id: account.id },
       data: {
         lastSyncError: message.slice(0, 500),
+        syncProgressStatus: "failed",
+        syncProgressStage: message.slice(0, 160),
+        syncProgressUpdatedAt: new Date(),
       },
     });
 
