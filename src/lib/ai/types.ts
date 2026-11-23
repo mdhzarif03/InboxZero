@@ -1,4 +1,4 @@
-export type AiTask = "classify" | "summarize" | "actions";
+export type AiTask = "classify" | "summarize" | "actions" | "ask";
 
 export type AiCompletionRequest = {
   task: AiTask;
