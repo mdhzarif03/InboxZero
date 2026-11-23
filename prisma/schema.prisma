@@ -173,6 +173,7 @@ model Message {
   subject          String   @default("")
   bodyText         String   @default("")  // plain-text body, truncated at ingest
   bodyHtml         String?  // original HTML alternative, sandboxed when rendered
+  bodyHtmlFetched  Boolean  @default(false) // distinguishes text-only messages from not-yet-backfilled messages
   snippet          String   @default("")
   isFromMe         Boolean  @default(false)
   isUnread         Boolean  @default(false)
