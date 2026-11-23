@@ -238,7 +238,7 @@ export function AppShell({
           <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open menu">
             <Menu />
           </Button>
-          <Link href="/inbox" className="lg:hidden" aria-label="InboxZero home"><BrandMark className="size-7" /></Link>
+          <Link href="/today" className="lg:hidden" aria-label="InboxZero home"><BrandMark className="size-7" /></Link>
 
           <div className="hidden min-w-0 items-center gap-2 text-sm lg:flex" aria-label="Breadcrumb">
             <span className="text-muted-foreground">InboxZero</span>
