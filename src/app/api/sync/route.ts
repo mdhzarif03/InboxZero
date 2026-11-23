@@ -52,8 +52,8 @@ export async function GET() {
   });
 }
 
-const anchorPost=`/**
- * POST /api/sync`;
+/**
+ * POST /api/sync
  *  - Signed-in user: syncs that user's own accounts only (with cooldown).
  *  - Worker (Authorization: Bearer SYNC_SECRET): syncs every ACTIVE account. Used by the scheduler.
  */
