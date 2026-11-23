@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { db } from "@/lib/db";
 import { getUserOrNull } from "@/lib/auth";
@@ -7,6 +7,10 @@ import { env } from "@/lib/env";
 
 /** Minimum time between user-triggered syncs of one account (protects Gmail quota and our cost). */
 const USER_SYNC_COOLDOWN_MS = 30_000;
+
+// Initial imports can take several minutes. Vercel must keep the post-response
+// task alive after the browser navigates away from the inbox.
+export const maxDuration = 300;
 
 function workerAuthorized(req: NextRequest): boolean {
   const secret = env().SYNC_SECRET;
@@ -68,15 +72,37 @@ export async function POST(req: NextRequest) {
   const user = await getUserOrNull();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const accounts = await db.connectedAccount.findMany({ where: { userId: user.id, status: "ACTIVE", provider: "gmail" }, select: { id: true, lastSyncedAt: true } });
-  const results = [];
-  for (const a of accounts) {
-    if (a.lastSyncedAt && Date.now() - a.lastSyncedAt.getTime() < USER_SYNC_COOLDOWN_MS) {
-      results.push({ accountId: a.id, status: "cooldown" });
+  const accounts = await db.connectedAccount.findMany({
+    where: { userId: user.id, status: "ACTIVE", provider: "gmail" },
+    select: { id: true, lastSyncedAt: true, syncLockedAt: true },
+  });
+
+  const results: Array<{ accountId: string; status: string }> = [];
+  const toStart: string[] = [];
+
+  for (const account of accounts) {
+    if (account.syncLockedAt && Date.now() - account.syncLockedAt.getTime() < 10 * 60 * 1000) {
+      results.push({ accountId: account.id, status: "skipped_locked" });
       continue;
     }
-    const outcome = await syncConnectedAccount(user.id, a.id);
-    results.push({ accountId: a.id, status: outcome.status });
+    if (account.lastSyncedAt && Date.now() - account.lastSyncedAt.getTime() < USER_SYNC_COOLDOWN_MS) {
+      results.push({ accountId: account.id, status: "cooldown" });
+      continue;
+    }
+    toStart.push(account.id);
+    results.push({ accountId: account.id, status: "accepted" });
   }
-  return NextResponse.json({ results });
+
+  // Respond immediately. Next.js after() keeps the sync task running on the
+  // server after the HTTP response, even if the user changes page or closes
+  // the tab. Progress is persisted in PostgreSQL and read by GET /api/sync.
+  if (toStart.length > 0) {
+    after(async () => {
+      for (const accountId of toStart) {
+        await syncConnectedAccount(user.id, accountId);
+      }
+    });
+  }
+
+  return NextResponse.json({ results, accepted: toStart.length }, { status: 202 });
 }
