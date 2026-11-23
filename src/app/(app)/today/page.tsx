@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarClock, CheckCircle2, ChevronRight, Clock3, Inbox, Mail, MessageSquareText, Sparkles } from "lucide-react";
+import { CalendarClock, CheckCircle2, ChevronRight, Clock3, Inbox, Mail, MessageSquareText } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { formatDate, formatDateTime } from "@/lib/utils";
@@ -19,14 +19,15 @@ export default async function TodayPage() {
   const now = new Date();
   const horizon = new Date(now.getTime() + 14 * 86_400_000);
 
-  const [account, actionCount, dueFollowUpCount, unreadCount, actions, followUps, deadlines, unreadThreads] = await Promise.all([
+  const [account, actionCount, dueFollowUpCount, unreadCount, upcomingDateCount, actions, followUps, deadlines, unreadThreads] = await Promise.all([
     db.connectedAccount.findFirst({
       where: { userId: user.id, provider: "gmail", status: "ACTIVE" },
-      select: { emailAddress: true, lastSyncedAt: true, syncProgressStatus: true },
+      select: { emailAddress: true, lastSyncedAt: true },
     }),
     db.actionItem.count({ where: { userId: user.id, status: { in: ["OPEN", "CONFIRMED"] } } }),
     db.followUp.count({ where: { userId: user.id, status: "DUE" } }),
     db.thread.count({ where: { userId: user.id, archived: false, unreadCount: { gt: 0 } } }),
+    db.deadline.count({ where: { userId: user.id, normalizedAt: { gte: now, lte: horizon }, userConfirmed: true } }),
     db.actionItem.findMany({
       where: { userId: user.id, status: { in: ["OPEN", "CONFIRMED"] } },
       include: { thread: { select: { id: true, subject: true, lastMessageAt: true } } },
@@ -70,11 +71,11 @@ export default async function TodayPage() {
         <StatCard label="Open actions" value={actionCount} icon={CheckCircle2} href="/actions" tone="bg-primary/10 text-primary" />
         <StatCard label="Follow-ups due" value={dueFollowUpCount} icon={Clock3} href="/follow-ups" tone="bg-amber-500/10 text-amber-600" />
         <StatCard label="Unread conversations" value={unreadCount} icon={Mail} href="/inbox" tone="bg-sky-500/10 text-sky-600" />
-        <StatCard label="Upcoming dates" value={deadlines.length} icon={CalendarClock} href="/deadlines" tone="bg-emerald-500/10 text-emerald-600" />
+        <StatCard label="Upcoming dates" value={upcomingDateCount} icon={CalendarClock} href="/deadlines" tone="bg-emerald-500/10 text-emerald-600" />
       </section>
 
       {account?.lastSyncedAt ? (
-        <p className="text-xs text-muted-foreground">Last synced {formatDateTime(account.lastSyncedAt)}. Counts reflect the latest synced mailbox data.</p>
+        <p className="text-xs text-muted-foreground">Connected as {account.emailAddress}. Last synced {formatDateTime(account.lastSyncedAt)}. Counts reflect the latest synced mailbox data.</p>
       ) : account ? (
         <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 px-4 py-3 text-sm">Your Gmail account is connected but has not been synced yet. <Link href="/gmail" className="font-medium text-primary hover:underline">Sync your mailbox</Link>.</div>
       ) : (
