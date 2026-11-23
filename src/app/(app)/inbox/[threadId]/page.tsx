@@ -56,16 +56,16 @@ export default async function ThreadPage({
   if (!thread) notFound();
 
   // Backfill formatted bodies for messages imported before HTML storage existed.
-  if (thread.connectedAccount.provider === "gmail" && thread.messages.some((message) => !message.bodyHtml)) {
+  if (thread.connectedAccount.provider === "gmail" && thread.messages.some((message) => !message.bodyHtmlFetched)) {
     try {
       const auth = await getAuthorizedClient(thread.connectedAccountId, user.id);
       for (const message of thread.messages) {
-        if (message.bodyHtml) continue;
+        if (message.bodyHtmlFetched) continue;
         const raw = await getFullMessage(auth, message.gmailMessageId);
         const normalized = raw ? normalizeGmailMessage(raw) : null;
         if (normalized?.bodyHtml) {
           await db.message.update({ where: { id: message.id }, data: { bodyHtml: normalized.bodyHtml } });
-          message.bodyHtml = normalized.bodyHtml;
+          message.bodyHtml = normalized.bodyHtml;\n          message.bodyHtmlFetched = true;
         }
       }
     } catch (error) {
