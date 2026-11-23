@@ -32,7 +32,7 @@ export default async function ThreadPage({
   const { threadId } = await params;
   const query = await searchParams;
   const returnParams = new URLSearchParams();
-  if (query.page && /^\\d+$/.test(query.page)) returnParams.set("page", query.page);
+  if (query.page && /^\d+$/.test(query.page)) returnParams.set("page", query.page);
   if (["25", "50", "100"].includes(query.pageSize ?? "")) returnParams.set("pageSize", query.pageSize!);
   if (query.category) returnParams.set("category", query.category);
   const inboxHref = returnParams.size ? `/inbox?${returnParams.toString()}` : "/inbox";
