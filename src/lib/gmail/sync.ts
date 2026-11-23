@@ -287,15 +287,15 @@ export async function syncConnectedAccount(
     return { status: "skipped_locked" };
   }
 
-  await setSyncProgress(account.id, "running", "Preparing mailbox", 0, 0);
-
   try {
+    await setSyncProgress(account.id, "running", "Preparing mailbox", 0, 0);
     let auth;
 
     try {
       auth = await getAuthorizedClient(account.id, userId);
     } catch (err) {
       if (err instanceof Error && err.message === "NEEDS_REAUTH") {
+        await setSyncProgress(account.id, "failed", "Reconnect your Gmail account", 0, 0);
         return { status: "needs_reauth" };
       }
 
