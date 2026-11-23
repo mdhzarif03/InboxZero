@@ -27,6 +27,25 @@ export const LOCK_TTL_MS = 10 * 60 * 1000;
 // Keep Gmail message fetching sequential to reduce quota pressure.
 const FETCH_CONCURRENCY = 1;
 
+async function setSyncProgress(
+  accountId: string,
+  status: string,
+  stage: string | null,
+  current: number,
+  total: number,
+): Promise<void> {
+  await db.connectedAccount.update({
+    where: { id: accountId },
+    data: {
+      syncProgressStatus: status,
+      syncProgressStage: stage,
+      syncProgressCurrent: current,
+      syncProgressTotal: total,
+      syncProgressUpdatedAt: new Date(),
+    },
+  });
+}
+
 export type SyncOutcome =
   | {
       status: "synced";
@@ -214,13 +233,16 @@ async function recomputeThread(
 async function fetchAndNormalize(
   auth: Parameters<typeof getFullMessage>[0],
   ids: Array<{ id: string }>,
+  onProgress?: (current: number, total: number) => Promise<void>,
 ): Promise<NormalizedMessage[]> {
   const fetched = await mapWithConcurrency(
     ids,
     FETCH_CONCURRENCY,
     async (ref) => {
       const raw = await getFullMessage(auth, ref.id);
-      return raw ? normalizeGmailMessage(raw) : null;
+      const normalized = raw ? normalizeGmailMessage(raw) : null;
+      if (onProgress) await onProgress(ids.indexOf(ref) + 1, ids.length);
+      return normalized;
     },
   );
 
@@ -265,6 +287,8 @@ export async function syncConnectedAccount(
     return { status: "skipped_locked" };
   }
 
+  await setSyncProgress(account.id, "running", "Preparing mailbox", 0, 0);
+
   try {
     let auth;
 
@@ -294,13 +318,19 @@ export async function syncConnectedAccount(
     const runInitial = async () => {
       mode = "initial";
 
+      await setSyncProgress(account.id, "running", "Finding recent emails", 0, 0);
       const refs = await listRecentMessageRefs(auth, {
         query: `newer_than:${INITIAL_SYNC_DAYS}d`,
         maxMessages: INITIAL_SYNC_MAX_MESSAGES,
       });
 
-      const messages = await fetchAndNormalize(auth, refs);
+      await setSyncProgress(account.id, "running", "Downloading email details", 0, refs.length);
+      const messages = await fetchAndNormalize(auth, refs, (current, total) =>
+        setSyncProgress(account.id, "running", "Downloading email details", current, total),
+      );
 
+      await setSyncProgress(account.id, "running", "Saving emails", 0, messages.length);
+      let saved = 0;
       for (const msg of messages) {
         const threadId = await persistMessage(
           userId,
@@ -310,6 +340,8 @@ export async function syncConnectedAccount(
         );
 
         touchedThreadIds.add(threadId);
+        saved += 1;
+        await setSyncProgress(account.id, "running", "Saving emails", saved, messages.length);
       }
 
       upserted = messages.length;
@@ -323,8 +355,12 @@ export async function syncConnectedAccount(
 
         newHistoryId = changes.latestHistoryId || newHistoryId;
 
-        const messages = await fetchAndNormalize(auth, changes.addedOrChanged);
+        await setSyncProgress(account.id, "running", "Checking new emails", 0, changes.addedOrChanged.length);
+        const messages = await fetchAndNormalize(auth, changes.addedOrChanged, (current, total) =>
+          setSyncProgress(account.id, "running", "Checking new emails", current, total),
+        );
 
+        let saved = 0;
         for (const msg of messages) {
           const threadId = await persistMessage(
             userId,
@@ -334,6 +370,8 @@ export async function syncConnectedAccount(
           );
 
           touchedThreadIds.add(threadId);
+          saved += 1;
+          await setSyncProgress(account.id, "running", "Saving new emails", saved, messages.length);
         }
 
         upserted = messages.length;
@@ -379,22 +417,32 @@ export async function syncConnectedAccount(
     // threads.get request (40 quota units) for every imported thread.
     // Incremental sync still refreshes thread labels because labels may have
     // been removed from messages and the local model stores labels per thread.
+    await setSyncProgress(account.id, "running", "Organizing conversations", 0, touchedThreadIds.size);
+    let organized = 0;
     if (mode === "incremental") {
       for (const threadId of touchedThreadIds) {
         await refreshThreadLabelsAndAggregates(auth, threadId, ownAddress);
+        organized += 1;
+        await setSyncProgress(account.id, "running", "Organizing conversations", organized, touchedThreadIds.size);
       }
     } else {
       for (const threadId of touchedThreadIds) {
         await recomputeThread(threadId, ownAddress);
+        organized += 1;
+        await setSyncProgress(account.id, "running", "Organizing conversations", organized, touchedThreadIds.size);
       }
     }
 
     // Run analysis for changed threads.
     // One analysis failure must not interrupt the entire sync.
+    await setSyncProgress(account.id, "running", "Analyzing conversations", 0, touchedThreadIds.size);
+    let analyzed = 0;
     for (const threadId of touchedThreadIds) {
       await refreshThreadAnalysis(userId, threadId).catch((err) => {
         console.error("[GMAIL ANALYSIS ERROR]", threadId, err);
       });
+      analyzed += 1;
+      await setSyncProgress(account.id, "running", "Analyzing conversations", analyzed, touchedThreadIds.size);
     }
 
     await db.connectedAccount.update({
@@ -403,6 +451,11 @@ export async function syncConnectedAccount(
         historyId: newHistoryId,
         lastSyncedAt: new Date(),
         lastSyncError: null,
+        syncProgressStatus: "completed",
+        syncProgressStage: "Sync complete",
+        syncProgressCurrent: upserted,
+        syncProgressTotal: upserted,
+        syncProgressUpdatedAt: new Date(),
       },
     });
 
