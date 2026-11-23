@@ -353,7 +353,7 @@ export async function embedInlineImages(
   await walk(message.payload);
   let result = html;
   for (const [contentId, dataUrl] of replacements) {
-    const escapedId = contentId.replace(/[.*+?^${}()|[\]\\]/g, "\\export async function getFullMessage(
+    const escapedId = contentId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   auth: Auth.OAuth2Client,
   id: string,
 ): Promise<GmailMessage | null> {");
