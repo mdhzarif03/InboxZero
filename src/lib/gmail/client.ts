@@ -34,7 +34,7 @@ function gmailFor(auth: Auth.OAuth2Client): gmail_v1.Gmail {
  * units/minute per warm server instance. The account sync lock prevents duplicate
  * sync workers for the same mailbox; this local gate also smooths other requests.
  */
-const MIN_REQUEST_INTERVAL_MS = 1_250;
+const MIN_REQUEST_INTERVAL_MS = 1_000;
 
 let nextRequestAt = 0;
 let requestQueue: Promise<void> = Promise.resolve();
