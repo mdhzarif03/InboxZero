@@ -150,7 +150,7 @@ Reviewed by reading the code. Nothing here has been penetration-tested or run.
 
 ## Missing from the product
 
-These were in the original specification and are not implemented: an onboarding flow, a separate dashboard (`/` redirects to the inbox), read/unread/archive/star actions (which need `gmail.modify`), a daily briefing, analytics, a draft assistant, calendar integration, semantic search, attachment downloads, key rotation, and a worker queue. Analysis currently runs inline during sync.
+These were in the original specification and are not implemented: an onboarding flow, read/unread/archive/star actions (which need `gmail.modify`), analytics, a draft assistant, calendar integration, semantic search, attachment downloads, key rotation, and a worker queue. Analysis currently runs inline during sync.
 
 ## Next steps, in a networked environment
 

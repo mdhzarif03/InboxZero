@@ -57,12 +57,7 @@ export default async function ActionCenterPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge className={ps.chip}>P{a.priority}</Badge>
                   <Badge tone={a.status === "CONFIRMED" ? "success" : "neutral"}>{a.status === "CONFIRMED" ? "Confirmed" : "Suggested"}</Badge>
-                  <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground" title={`${Math.round(a.confidence * 100)}% confidence`}>
-                    <span className="h-1.5 w-12 overflow-hidden rounded-full bg-muted" aria-hidden="true">
-                      <span className="block h-full rounded-full bg-primary" style={{ width: `${Math.round(a.confidence * 100)}%` }} />
-                    </span>
-                    {Math.round(a.confidence * 100)}%
-                  </span>
+
                 </div>
                 <p className="mt-3.5 text-[15px] font-medium leading-relaxed">{a.description}</p>
                 {a.deadlineText ? (
