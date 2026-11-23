@@ -354,9 +354,6 @@ export async function embedInlineImages(
   let result = html;
   for (const [contentId, dataUrl] of replacements) {
     const escapedId = contentId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  auth: Auth.OAuth2Client,
-  id: string,
-): Promise<GmailMessage | null> {");
     result = result.replace(new RegExp(`cid:${escapedId}`, "gi"), dataUrl);
   }
   return result;
