@@ -14,11 +14,11 @@
     --muted-foreground: 240 4% 40%;
     --border: 240 8% 91%;
     --input: 240 8% 87%;
-    --accent: 252 90% 97%;
-    --accent-foreground: 252 70% 42%;
-    --primary: 252 83% 56%;
+    --accent: 214 85% 96%;
+    --accent-foreground: 215 75% 34%;
+    --primary: 215 78% 43%;
     --primary-foreground: 0 0% 100%;
-    --ring: 252 83% 62%;
+    --ring: 215 78% 50%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
     --success: 152 60% 33%;
@@ -38,11 +38,11 @@
     --muted-foreground: 240 5% 66%;
     --border: 240 6% 15%;
     --input: 240 6% 20%;
-    --accent: 252 35% 15%;
-    --accent-foreground: 252 90% 85%;
-    --primary: 252 85% 64%;
+    --accent: 215 38% 15%;
+    --accent-foreground: 210 90% 88%;
+    --primary: 212 88% 64%;
     --primary-foreground: 0 0% 100%;
-    --ring: 252 85% 68%;
+    --ring: 212 88% 68%;
     --destructive: 0 72% 56%;
     --destructive-foreground: 0 0% 100%;
     --success: 152 55% 48%;
@@ -91,7 +91,7 @@
   .mask-fade-b { -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent); mask-image: linear-gradient(to bottom, #000 55%, transparent); }
   .mask-radial { -webkit-mask-image: radial-gradient(ellipse at center, #000 30%, transparent 72%); mask-image: radial-gradient(ellipse at center, #000 30%, transparent 72%); }
   .text-gradient {
-    background-image: linear-gradient(120deg, hsl(var(--foreground)) 20%, hsl(var(--primary)) 55%, hsl(280 80% 62%) 95%);
+    background-image: linear-gradient(120deg, hsl(var(--foreground)) 20%, hsl(var(--primary)) 85%);
     -webkit-background-clip: text; background-clip: text; color: transparent;
   }
   .glass {
