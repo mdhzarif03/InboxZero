@@ -84,7 +84,7 @@ function ProductPreview() {
 }
 
 export default async function LandingPage({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
-  if (await getUserOrNull()) redirect("/inbox");
+  if (await getUserOrNull()) redirect("/today");
   const params = await searchParams;
   return (
     <div className="relative overflow-x-clip">
