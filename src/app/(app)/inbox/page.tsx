@@ -1,27 +1,18 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import type { CategoryKind } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
-import { syncNow } from "@/lib/actions/user";
 import { CATEGORY_LABELS, CATEGORY_ORDER, formatDate } from "@/lib/utils";
-import { Archive, ChevronRight, Flame, Hourglass, Inbox, Mail, RefreshCw, Reply, CalendarClock } from "lucide-react";
+import { Archive, ChevronRight, Flame, Hourglass, Inbox, Mail, Reply, CalendarClock } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { SubmitButton } from "@/components/ui/submit-button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Notice } from "@/components/ui/notice";
+import { SyncProgress } from "@/components/gmail/sync-progress";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatCard } from "@/components/ui/stat-card";
 import { categoryStyle } from "@/lib/ui/category-style";
 import { cn } from "@/lib/utils";
-
-/** Form action wrapper: server actions used by forms must return void, so we redirect with the outcome. */
-async function syncFromInbox() {
-  "use server";
-  const result = await syncNow();
-  redirect(result.ok ? "/inbox?synced=1" : `/inbox?error=${encodeURIComponent(result.message)}`);
-}
 
 export const metadata = { title: "Smart Inbox" };
 export const dynamic = "force-dynamic";
@@ -81,14 +72,11 @@ export default async function InboxPage({
         }
         title="Smart inbox"
         description={account.lastSyncedAt ? `Last synced ${formatDate(account.lastSyncedAt)}. Conversations are grouped by what needs your attention.` : "Not synced yet. Conversations are grouped by what needs your attention."}
-        actions={
-          <form action={syncFromInbox}>
-            <SubmitButton variant="outline" pendingLabel="Syncing…"><RefreshCw /> Sync inbox</SubmitButton>
-          </form>
-        }
       />
 
       {account.lastSyncError ? <Notice tone="error">Last sync failed: {account.lastSyncError}</Notice> : null}
+
+      <SyncProgress />
 
       <section aria-label="Overview" className="stagger grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Priority" value={n("PRIORITY")} icon={Flame} href="/inbox?category=PRIORITY" tone={categoryStyle("PRIORITY").tile} active={active === "PRIORITY"} />
