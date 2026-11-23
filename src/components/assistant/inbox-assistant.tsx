@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
-import { ArrowUpRight, Bot, Loader2, Send, Sparkles } from "lucide-react";
+import { ArrowUpRight, Bot, Loader2, Send, ShieldCheck } from "lucide-react";
 
 type Source = { threadId: string; subject: string; reason: string };
 type Exchange = { question: string; answer: string; sources: Source[] };
@@ -11,7 +11,8 @@ const SUGGESTIONS = [
   "Which emails need my attention today?",
   "What am I still waiting to hear back about?",
   "What deadlines are coming up?",
-  "Summarize my most important recent conversations.",
+  "Show me my latest conversations",
+  "Find emails about my application",
 ];
 
 export function InboxAssistant() {
@@ -37,7 +38,7 @@ export function InboxAssistant() {
       setHistory((items) => [...items, { question: value, answer: data.answer, sources: data.sources ?? [] }]);
       setQuestion("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not ask InboxZero.");
+      setError(err instanceof Error ? err.message : "Could not search your inbox.");
     } finally {
       setLoading(false);
     }
@@ -49,16 +50,16 @@ export function InboxAssistant() {
         <div className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary"><Bot className="size-5" /></div>
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold">Ask your inbox</h2>
-          <p className="text-xs text-muted-foreground">Answers grounded in your synced conversations, with source links.</p>
+          <p className="text-xs text-muted-foreground">Search conversations and get answers from your existing action, follow-up and date records.</p>
         </div>
-        <span className="hidden items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-[11px] text-muted-foreground sm:inline-flex"><Sparkles className="size-3" /> Gemini</span>
+        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300"><ShieldCheck className="size-3" /> Free · No AI API</span>
       </div>
 
       <div className="space-y-5 p-5">
         {history.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border bg-muted/20 p-5">
-            <p className="text-sm font-medium">Your mailbox is searchable as context, not just a pile of messages.</p>
-            <p className="mt-1 text-sm text-muted-foreground">Ask a question. InboxZero finds relevant conversations and asks Gemini to answer from those records.</p>
+            <p className="text-sm font-medium">Your inbox can answer practical questions without a paid AI service.</p>
+            <p className="mt-1 text-sm text-muted-foreground">Ask about open tasks, waiting replies, dates, recent conversations, or search for a name and phrase. Results link back to the original email thread.</p>
             <div className="mt-4 flex flex-wrap gap-2">
               {SUGGESTIONS.map((suggestion) => (
                 <button key={suggestion} type="button" onClick={() => setQuestion(suggestion)} className="rounded-full border border-border bg-background px-3 py-2 text-left text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground">
@@ -76,7 +77,7 @@ export function InboxAssistant() {
                   <p className="whitespace-pre-wrap text-sm leading-7">{item.answer}</p>
                   {item.sources.length ? (
                     <div className="mt-4 border-t border-border pt-3">
-                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Sources</p>
+                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Source conversations</p>
                       <ul className="space-y-2">
                         {item.sources.map((source) => (
                           <li key={source.threadId}>
@@ -101,13 +102,13 @@ export function InboxAssistant() {
         {error ? <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">{error}</p> : null}
 
         <form onSubmit={submit} className="flex items-end gap-2 rounded-xl border border-input bg-background p-2 shadow-xs focus-within:ring-2 focus-within:ring-ring">
-          <label htmlFor="inbox-question" className="sr-only">Ask a question about your inbox</label>
-          <textarea id="inbox-question" value={question} onChange={(event) => setQuestion(event.target.value)} maxLength={600} rows={2} placeholder="Ask anything about your emails…" className="max-h-36 min-h-12 flex-1 resize-y bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground" />
-          <button type="submit" disabled={loading || question.trim().length < 3} aria-label="Send question" className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40">
+          <label htmlFor="inbox-question" className="sr-only">Search or ask a question about your inbox</label>
+          <textarea id="inbox-question" value={question} onChange={(event) => setQuestion(event.target.value)} maxLength={600} rows={2} placeholder="Search your emails or ask about tasks and follow-ups…" className="max-h-36 min-h-12 flex-1 resize-y bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground" />
+          <button type="submit" disabled={loading || question.trim().length < 3} aria-label="Search inbox" className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40">
             {loading ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
           </button>
         </form>
-        <p className="text-[11px] text-muted-foreground">Read-only. InboxZero never sends or changes email. Questions are processed under your AI consent and usage limit.</p>
+        <p className="text-[11px] text-muted-foreground">Free and read-only. Search and summaries run on InboxZero's server using your existing synced records. No email content is sent to Gemini or another AI provider.</p>
       </div>
     </section>
   );
