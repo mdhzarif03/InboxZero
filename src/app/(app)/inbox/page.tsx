@@ -118,12 +118,13 @@ export default async function InboxPage({
                   {active !== "ALL" ? <input type="hidden" name="category" value={active} /> : null}
                   <input type="hidden" name="page" value="1" />
                   <label htmlFor="inbox-page-size">Show</label>
-                  <select id="inbox-page-size" name="pageSize" defaultValue={String(pageSize)} onChange={(event) => event.currentTarget.form?.requestSubmit()} className="h-8 rounded-lg border border-border bg-card px-2 text-xs text-foreground outline-none focus:ring-2 focus:ring-ring">
+                  <select id="inbox-page-size" name="pageSize" defaultValue={String(pageSize)} className="h-8 rounded-lg border border-border bg-card px-2 text-xs text-foreground outline-none focus:ring-2 focus:ring-ring">
                     <option value="25">25</option>
                     <option value="50">50</option>
                     <option value="100">100</option>
                   </select>
                   <span>per page</span>
+                  <button type="submit" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "h-8 px-3")}>Apply</button>
                 </form>
               </div>
               <ul className="stagger overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
