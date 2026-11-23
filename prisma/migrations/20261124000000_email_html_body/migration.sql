@@ -1,1 +1,2 @@
 ALTER TABLE "Message" ADD COLUMN "bodyHtml" TEXT;
+ALTER TABLE "Message" ADD COLUMN "bodyHtmlFetched" BOOLEAN NOT NULL DEFAULT false;
