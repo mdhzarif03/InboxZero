@@ -40,7 +40,7 @@ export default async function AssistantPage() {
         icon={Bot}
         eyebrow={<span className="inline-flex items-center gap-2"><Sparkles className="size-3.5 text-primary" /> YOUR EMAIL, UNDERSTOOD</span>}
         title="Inbox Assistant"
-        description="A working view of what your email is asking from you, plus an assistant that can answer questions across your synced conversations."
+        description="Your daily email command center: open commitments, upcoming dates, waiting replies and free, private search across synced conversations."
       />
 
       <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
@@ -83,7 +83,7 @@ export default async function AssistantPage() {
       ) : null}
 
       <InboxAssistant />
-      <p className="flex items-center gap-2 text-xs text-muted-foreground"><CheckCircle2 className="size-3.5" /> Your email remains read-only. AI answers are suggestions, not actions taken on your behalf.</p>
+      <p className="flex items-center gap-2 text-xs text-muted-foreground"><CheckCircle2 className="size-3.5" /> Your email remains read-only. Inbox Assistant uses deterministic search and your existing analysis records; it does not call an external AI API.</p>
     </div>
   );
 }
