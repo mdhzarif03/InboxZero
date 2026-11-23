@@ -111,9 +111,21 @@ async function persistMessage(
       gmailThreadId: msg.gmailThreadId,
       subject: msg.subject,
       lastMessageAt: msg.sentAt,
+      labelIds: msg.labelIds,
     },
     update: {},
   });
+
+  // Message payloads already include labelIds. Preserve their union on the thread
+  // so the initial import does not need an additional threads.get call per thread.
+  const mergedLabels = [...new Set([...thread.labelIds, ...msg.labelIds])];
+  if (mergedLabels.length !== thread.labelIds.length ||
+      mergedLabels.some((label) => !thread.labelIds.includes(label))) {
+    await db.thread.update({
+      where: { id: thread.id },
+      data: { labelIds: mergedLabels },
+    });
+  }
 
   const isFromMe = isFromOwnAddress(msg.fromAddress, ownAddress);
 
@@ -362,9 +374,19 @@ export async function syncConnectedAccount(
       }
     }
 
-    // Refresh Gmail labels and recompute local thread aggregates.
-    for (const threadId of touchedThreadIds) {
-      await refreshThreadLabelsAndAggregates(auth, threadId, ownAddress);
+    // On initial import, labels were captured from each full message payload
+    // and merged into the local thread during persistence. Avoid one extra
+    // threads.get request (40 quota units) for every imported thread.
+    // Incremental sync still refreshes thread labels because labels may have
+    // been removed from messages and the local model stores labels per thread.
+    if (mode === "incremental") {
+      for (const threadId of touchedThreadIds) {
+        await refreshThreadLabelsAndAggregates(auth, threadId, ownAddress);
+      }
+    } else {
+      for (const threadId of touchedThreadIds) {
+        await recomputeThread(threadId, ownAddress);
+      }
     }
 
     // Run analysis for changed threads.
