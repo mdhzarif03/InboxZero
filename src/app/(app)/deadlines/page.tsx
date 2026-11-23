@@ -108,7 +108,6 @@ function Section({ title, rows, muted = false }: { title: string; rows: Row[]; m
                 <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                   <span>{when ? formatDateTime(when) : "no normalized date"}</span>
                   <span className="inline-flex items-center gap-1"><Globe2 className="size-3" aria-hidden="true" />{d.timezone ?? "timezone not stated"}</span>
-                  <span>{Math.round(d.confidence * 100)}% confidence</span>
                 </p>
                 <Link href={`/inbox/${d.thread.id}`} className="inline-flex max-w-full items-center gap-1 text-[13px] text-muted-foreground transition-colors hover:text-primary">
                   <span className="truncate">From {d.thread.subject}</span>
