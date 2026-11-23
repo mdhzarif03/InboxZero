@@ -11,6 +11,9 @@ import { Card } from "@/components/ui/card";
 import { Notice } from "@/components/ui/notice";
 import { categoryStyle } from "@/lib/ui/category-style";
 import { ThreadActions } from "./thread-actions";
+import { getAuthorizedClient } from "@/lib/gmail/oauth";
+import { getFullMessage } from "@/lib/gmail/client";
+import { normalizeGmailMessage } from "@/lib/gmail/parse";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +54,24 @@ export default async function ThreadPage({
     },
   });
   if (!thread) notFound();
+
+  // Backfill formatted bodies for messages imported before HTML storage existed.
+  if (thread.connectedAccount.provider === "gmail" && thread.messages.some((message) => !message.bodyHtml)) {
+    try {
+      const auth = await getAuthorizedClient(thread.connectedAccountId, user.id);
+      for (const message of thread.messages) {
+        if (message.bodyHtml) continue;
+        const raw = await getFullMessage(auth, message.gmailMessageId);
+        const normalized = raw ? normalizeGmailMessage(raw) : null;
+        if (normalized?.bodyHtml) {
+          await db.message.update({ where: { id: message.id }, data: { bodyHtml: normalized.bodyHtml } });
+          message.bodyHtml = normalized.bodyHtml;
+        }
+      }
+    } catch (error) {
+      console.error("[EMAIL HTML LOAD ERROR]", threadId, error);
+    }
+  }
 
   const summaryPayload = (thread.summary?.payload ?? {}) as { source?: string; currentStatus?: string; items?: SummaryItem[]; disclaimer?: string };
   const summaryItems = summaryPayload.items ?? [];
@@ -130,8 +151,21 @@ export default async function ThreadPage({
                           <dd className="min-w-0 break-words text-foreground">{m.ccAddresses.join(", ")}</dd>
                         </> : null}
                       </dl>
-                      {/* Render as escaped plain text: email-supplied HTML is never executed. */}
-                      <div className="max-w-[82ch] whitespace-pre-wrap break-words text-[15px] leading-7 text-foreground sm:text-[15.5px] sm:leading-8">{m.bodyText || m.snippet}</div>
+                      {m.bodyHtml ? (
+                        <div className="overflow-hidden rounded-xl border border-border/70 bg-white">
+                          <iframe
+                            title={`Formatted email from ${m.fromName ?? m.fromAddress}`}
+                            sandbox="allow-popups allow-popups-to-escape-sandbox"
+                            referrerPolicy="no-referrer"
+                            loading="lazy"
+                            className="block min-h-[560px] w-full border-0 bg-white"
+                            style={{ height: "min(1100px, 78vh)" }}
+                            srcDoc={`<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data:; style-src 'unsafe-inline' https:; font-src https: data:; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;padding:0;background:#fff;color:#202124;font:14px Arial,sans-serif}body{padding:24px;overflow-wrap:anywhere}img{max-width:100%;height:auto}table{max-width:100%}pre{white-space:pre-wrap;overflow-wrap:anywhere}a{color:#1967d2}*{box-sizing:border-box}</style></head><body>${m.bodyHtml}</body></html>`}
+                          />
+                        </div>
+                      ) : (
+                        <div className="max-w-[82ch] whitespace-pre-wrap break-words text-[15px] leading-7 text-foreground sm:text-[15.5px] sm:leading-8">{m.bodyText || m.snippet}</div>
+                      )}
                       {attachments.length > 0 ? (
                         <p className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                           <Paperclip className="size-3.5" aria-hidden="true" />
