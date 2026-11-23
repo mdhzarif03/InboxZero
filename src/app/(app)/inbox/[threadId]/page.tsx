@@ -72,9 +72,13 @@ export default async function ThreadPage({
         if (message.bodyHtmlFetched) continue;
         const raw = await getFullMessage(auth, message.gmailMessageId);
         const normalized = raw ? normalizeGmailMessage(raw) : null;
-        if (normalized?.bodyHtml) {
-          await db.message.update({ where: { id: message.id }, data: { bodyHtml: normalized.bodyHtml } });
-          message.bodyHtml = normalized.bodyHtml;\n          message.bodyHtmlFetched = true;
+        if (normalized) {
+          await db.message.update({
+            where: { id: message.id },
+            data: { bodyHtml: normalized.bodyHtml, bodyHtmlFetched: true },
+          });
+          message.bodyHtml = normalized.bodyHtml;
+          message.bodyHtmlFetched = true;
         }
       }
     } catch (error) {
