@@ -37,6 +37,7 @@ export type NormalizedMessage = {
   ccAddresses: string[];
   subject: string;
   bodyText: string;
+  bodyHtml: string | null;
   snippet: string;
   sentAt: Date;
   isUnread: boolean;
@@ -147,6 +148,21 @@ export function extractBodyText(payload: GmailPart | null | undefined): string {
   return sanitizeText(text).slice(0, MAX_BODY_CHARS);
 }
 
+/** Extracts the original HTML alternative for sandboxed email rendering. */
+export function extractBodyHtml(payload: GmailPart | null | undefined): string | null {
+  if (!payload) return null;
+  const html: string[] = [];
+  const walk = (part: GmailPart) => {
+    const mime = (part.mimeType ?? "").toLowerCase();
+    if (part.parts?.length) { part.parts.forEach(walk); return; }
+    if (part.body?.attachmentId) return;
+    if (mime === "text/html") html.push(decodeBase64Url(part.body?.data));
+  };
+  walk(payload);
+  const value = html.join("\n");
+  return value.trim() ? value.slice(0, 100_000) : null;
+}
+
 /** Attachment metadata only. Attachment bytes are never downloaded or stored by this milestone. */
 export function collectAttachments(payload: GmailPart | null | undefined): AttachmentMeta[] {
   const out: AttachmentMeta[] = [];
@@ -184,6 +200,7 @@ export function normalizeGmailMessage(message: GmailMessage): NormalizedMessage 
     ccAddresses: cc.map((a) => a.address),
     subject: sanitizeText(getHeader(headers, "Subject") ?? "(no subject)").slice(0, 998),
     bodyText: extractBodyText(message.payload),
+    bodyHtml: extractBodyHtml(message.payload),
     snippet: sanitizeText(message.snippet ?? "").slice(0, 500),
     sentAt: Number.isNaN(sentAt.getTime()) ? new Date() : sentAt,
     isUnread: labelIds.includes("UNREAD"),
