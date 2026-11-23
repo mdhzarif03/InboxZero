@@ -99,7 +99,7 @@ export function SyncProgress() {
             />
           </div>
           <div className="flex items-center justify-between text-xs tabular-nums text-muted-foreground">
-            <span>{determinate ? `${current.toLocaleString()} of ${total.toLocaleString()} items` : running ? "Preparing mailbox…" : failed ? "Incomplete" : "Complete"}</span>
+            <span>{determinate ? `${current.toLocaleString()} of ${total.toLocaleString()} ${snapshot?.stage?.toLowerCase().includes("conversation") ? "conversations" : "emails"}` : running ? "Preparing mailbox…" : failed ? "Incomplete" : completed ? "0 new emails" : "Complete"}</span>
             {determinate ? <span>{percent}%</span> : null}
           </div>
         </div>
