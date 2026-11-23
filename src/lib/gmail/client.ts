@@ -1,6 +1,6 @@
 import { google, type gmail_v1 } from "googleapis";
 import type { Auth } from "googleapis";
-import type { GmailMessage } from "@/lib/gmail/parse";
+import { decodeBase64Url, type GmailMessage, type GmailPart } from "@/lib/gmail/parse";
 
 export class HistoryExpiredError extends Error {
   readonly code = "HISTORY_EXPIRED";
@@ -309,6 +309,57 @@ export async function listHistoryChanges(
     deletedIds: [...deleted],
     latestHistoryId,
   };
+}
+
+
+/**
+ * Replace RFC 2392 cid: references with data URLs for inline image parts.
+ * Gmail stores many logos as inline MIME attachments rather than public URLs.
+ */
+export async function embedInlineImages(
+  auth: Auth.OAuth2Client,
+  message: GmailMessage,
+  html: string | null,
+): Promise<string | null> {
+  if (!html || !message.payload) return html;
+  const gmail = gmailFor(auth);
+  const replacements = new Map<string, string>();
+
+  const walk = async (part: GmailPart): Promise<void> => {
+    const mimeType = (part.mimeType ?? "").toLowerCase();
+    const contentId = part.headers?.find(
+      (header) => (header.name ?? "").toLowerCase() === "content-id",
+    )?.value?.trim().replace(/^<|>$/g, "");
+    if (contentId && mimeType.startsWith("image/")) {
+      let data = part.body?.data ?? null;
+      if (!data && part.body?.attachmentId && message.id) {
+        const response = await withRetry(() =>
+          gmail.users.messages.attachments.get({
+            userId: "me",
+            messageId: message.id!,
+            id: part.body!.attachmentId!,
+          }),
+        );
+        data = response.data.data ?? null;
+      }
+      if (data) {
+        const base64 = data.replace(/-/g, "+").replace(/_/g, "/");
+        replacements.set(contentId.toLowerCase(), `data:${mimeType};base64,${base64}`);
+      }
+    }
+    for (const child of part.parts ?? []) await walk(child);
+  };
+
+  await walk(message.payload);
+  let result = html;
+  for (const [contentId, dataUrl] of replacements) {
+    const escapedId = contentId.replace(/[.*+?^${}()|[\]\\]/g, "\\export async function getFullMessage(
+  auth: Auth.OAuth2Client,
+  id: string,
+): Promise<GmailMessage | null> {");
+    result = result.replace(new RegExp(`cid:${escapedId}`, "gi"), dataUrl);
+  }
+  return result;
 }
 
 export async function getFullMessage(
